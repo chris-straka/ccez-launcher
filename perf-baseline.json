@@ -1,0 +1,5 @@
+{
+  "device": "launcher_avd (arm64 emulator, android-36), release build",
+  "cold_ms": 500,
+  "home_ms": 150
+}
