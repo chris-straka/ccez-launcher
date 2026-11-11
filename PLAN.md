@@ -44,7 +44,17 @@ with a release the owner can install.
 - Home: a short row of pinned apps at the bottom; swipe up for the drawer
   (A–Z, a search field at the top that opens the keyboard at once).
 - Long-press an app: pin/unpin, app info, uninstall.
-- Search: apps by name; Enter launches the top one.
+- Search: apps by name; Enter launches the top one. Beyond apps: contacts,
+  Android settings pages (by name), a calculator and unit conversion typed
+  straight in, and words (Stage 3).
+- Hide apps, and folders (a hold on one app dropped on another).
+- App shortcuts: a hold shows the app's own shortcuts ("New message"…)
+  through `LauncherApps.getShortcuts` (the default home app may read them);
+  pinned shortcuts on home.
+- Hidden space (as OnePlus's launcher has, owner 2026-11-11): swipe right
+  in the app drawer for a page of hidden apps, shown nowhere else, in no
+  search; optionally behind the fingerprint (`BiometricPrompt`). Android
+  15's Private space shows there too when the phone has one.
 - Gestures: swipe down for notifications (`StatusBarManager` expand via
   reflection is unreliable: use the accessibility-free
   `expandNotificationsPanel` call or the system gesture), double-tap to
@@ -109,6 +119,37 @@ turns it on. Never blocks: a second tap on the icon goes straight through.
   one tap to save it as a learning word.
 - Widget hosting for the few widgets the owner keeps.
 
+## Built in from the start (future-proofing, owner agreed 2026-11-11)
+
+- Run by agents (owner, 2026-11-08: "settings yourself", "logs for
+  agents"): every setting in one JSON file the app watches, and an adb
+  route to read and set them (`adb shell content call` on an exported,
+  signature-or-shell-only ContentProvider, or a debug broadcast), wrapped
+  by `scripts/launcher.ts get|set|log|dump`. A log with context (what was
+  tapped, which app, timings) readable the same way; user-facing errors
+  stay a few plain words.
+- Backup and restore of the layout: pins, hidden apps, hidden space,
+  folders, settings, as one JSON file, with `scripts/launcher.ts backup|
+  restore` over adb (validated before writing), as ccez-keys' keyboard
+  does (`Backup.kt`, `keys backup/restore`). Restores tested on the
+  emulator, never the owner's phone.
+- Quiet with the overlay: while ccez-launcher is the home app, the
+  keyboard's words-on-screen overlay leaves the home screen to it (a
+  shared setting or a broadcast; the overlay already reads the front app).
+- One review schedule: the words use the core's FSRS scheduler (being added
+  to ccez-keys' core, synced through ccez-words), never a schedule of their
+  own.
+- Quality gates, run before every release: unit tests, Compose UI tests
+  on the emulator, screenshot tests of home, drawer, search, hidden space
+  and a word card (kept under `screenshots/`, diffs reviewed), and a
+  Macrobenchmark of cold start and return-to-home that fails the release
+  when either gets slower than the numbers recorded here.
+- Big text and TalkBack: every screen works at the largest font and
+  display size, words and labels readable by TalkBack.
+- Tablet and landscape: layouts that use the width (more columns, the
+  drawer beside home), checked on a tablet emulator.
+- Edge-to-edge and predictive back from the start; targetSdk kept current.
+
 ## Not doing
 
 - Icon packs, themes, a launcher settings maze. One look, chosen here.
@@ -116,4 +157,5 @@ turns it on. Never blocks: a second tap on the icon goes straight through.
 
 ## Status
 
-Nothing built yet (2026-11-11).
+Nothing built yet (2026-11-11). The launcher starts after ccez-keys' phone
+overlay run and its FSRS work.
