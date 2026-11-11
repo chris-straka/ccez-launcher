@@ -111,6 +111,31 @@ class LauncherUiTest {
         }
     }
 
+    @Test fun aLearningWordShowsOnHomeAndTapGradesItAway() {
+        val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val e = Words.engine(ctx)
+        e.setWordStatus("fr", "zztestword", uk.ccez.keys.core.WordStatus.LEARNING)
+        // Room for every due word, this one included.
+        App.instance.settings.set("words.count", "12")
+        App.instance.settingsChanged()
+        try {
+            rule.waitUntil(timeoutMillis = 20_000) {
+                rule.onAllNodesWithText("zztestword").fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithText("zztestword").performClick()
+            rule.waitUntil(timeoutMillis = 10_000) {
+                rule.onAllNodesWithText("zztestword").fetchSemanticsNodes().isEmpty()
+            }
+            // Graded Good: the core no longer offers it right away.
+            val due = Words.screenWords(ctx, emptyList()).map { it.word }
+            org.junit.Assert.assertFalse("graded word not due again", "zztestword" in due)
+        } finally {
+            e.setWordStatus("fr", "zztestword", uk.ccez.keys.core.WordStatus.NEW)
+            App.instance.settings.set("words.count", "4")
+            App.instance.settingsChanged()
+        }
+    }
+
     @Test fun longPressOnEmptyHomeOpensSettings() {
         rule.onNodeWithTag("home-empty").performTouchInput { longClick() }
         rule.onNodeWithTag("settings").assertIsDisplayed()
