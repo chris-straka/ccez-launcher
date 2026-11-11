@@ -8,6 +8,7 @@ import android.os.Binder
 import android.os.Bundle
 import android.os.Process
 import android.util.Base64
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /**
@@ -81,6 +82,16 @@ class Control : ContentProvider() {
                 "update" -> {
                     Updater.force(app)
                     "checking"
+                }
+                // Statuses + schedule to and from ccez-words, dictionaries fetched.
+                // `launcher sync` for every learning language, `launcher sync fr` for one.
+                "sync" -> {
+                    WordSync.soon(app, 0)
+                    val lang = arg?.trim().orEmpty()
+                    if (lang.isNotEmpty()) {
+                        app.scope.launch { runCatching { Dictionaries.ensure(app, lang) } }
+                    }
+                    "syncing"
                 }
                 // A word's status in the core: `launcher word fr libre [new|learning|known]`.
                 "word" -> word(app, arg)

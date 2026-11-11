@@ -32,11 +32,12 @@ object Words {
         }
     }
 
-    /** The launcher's words.count / words.langs, kept in the core's own settings. */
+    /** The launcher's word settings, kept in the core's own settings too. */
     fun applyWordSettings(ctx: Context, e: Engine) {
         val app = ctx as? App ?: (ctx.applicationContext as? App) ?: return
         runCatching { e.setSetting("learning.screen", app.settings.number("words.count").toString()) }
         runCatching { e.setSetting("learning.screen_langs", app.settings.number("words.langs").toString()) }
+        runCatching { e.setSetting("words.server", org.json.JSONObject.quote(app.settings.get("words.server") as String)) }
     }
 
     /**

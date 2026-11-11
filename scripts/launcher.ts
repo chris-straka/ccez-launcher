@@ -75,7 +75,7 @@ function restore(file?: string): void {
   console.log("sent; `launcher log` says how it went");
 }
 
-const HELP = `launcher status|schema|dump|screen|update
+const HELP = `launcher status|schema|dump|screen|update|sync [lang]
 launcher get [setting]
 launcher set <setting> <json>
 launcher log [lines]
@@ -92,6 +92,7 @@ function main(): void {
     case "dump": console.log(call("dump")); break;
     case "screen": console.log(call("screen")); break;
     case "update": console.log(call("update")); break;
+    case "sync": console.log(call("sync", rest[0])); break;
     case "get": console.log(call("get", rest[0])); break;
     case "set": {
       if (rest.length < 2) throw new Error("set needs a setting and a value");
