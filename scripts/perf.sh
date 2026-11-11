@@ -10,6 +10,9 @@ SERIAL="${LAUNCHER_SERIAL:?set LAUNCHER_SERIAL}"
 PKG=uk.ccez.launcher
 total_ms() { grep -E "^TotalTime:" | head -1 | awk '{print $2}' || true; }
 wait_ms() { grep -E "^WaitTime:" | head -1 | awk '{print $2}' || true; }
+# Steady state, like a day after installing: let ART compile first, or
+# the first cold start pays for it. (Cold here means the process is gone.)
+adb -s "$SERIAL" shell cmd package compile -m speed-profile -f "$PKG" >/dev/null 2>&1 || true
 best=999999
 for i in 1 2 3 4 5; do
   adb -s "$SERIAL" shell am force-stop "$PKG" >/dev/null
@@ -26,7 +29,7 @@ for i in 1 2 3 4 5; do
   if [ -n "$t" ] && [ "$t" -gt 0 ] && [ "$t" -lt "$best" ]; then best=$t; fi
 done
 home_again=$best
-echo "cold start: ${cold} ms; return to home: ${home_again} ms (am start -W, best of 3, $SERIAL)"
+echo "cold start: ${cold} ms; return to home: ${home_again} ms (am start -W, best of 5, $SERIAL)"
 python3 - "$cold" "$home_again" <<'EOF'
 import json, sys
 cold, home_again = int(sys.argv[1]), int(sys.argv[2])

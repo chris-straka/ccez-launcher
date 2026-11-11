@@ -35,36 +35,21 @@ with a release the owner can install.
   (`android/.../update/Updater.kt` there). No GitHub Actions (private repo,
   minutes are out): build and release locally with a `scripts/release.sh`.
 
-## Stage 1: a launcher that's good at being a launcher
+## Stage 1: a launcher that's good at being a launcher — shipped
 
-- HOME activity (`android.intent.category.HOME`), asks to be the default
-  home app (RoleManager `ROLE_HOME`).
-- Apps from `LauncherApps` for every profile (the owner has a second
-  profile: Secure Folder / Dual Messenger), with their icons, cached.
-- Home: a short row of pinned apps at the bottom; swipe up for the drawer
-  (A–Z, a search field at the top that opens the keyboard at once).
-- Long-press an app: pin/unpin, app info, uninstall.
-- Search: apps by name; Enter launches the top one. Beyond apps: contacts,
-  Android settings pages (by name), a calculator and unit conversion typed
-  straight in, and words (Stage 3).
-- Hide apps, and folders (a hold on one app dropped on another).
-- App shortcuts: a hold shows the app's own shortcuts ("New message"…)
-  through `LauncherApps.getShortcuts` (the default home app may read them);
-  pinned shortcuts on home.
-- Hidden space (as OnePlus's launcher has, owner 2026-11-11): swipe right
-  in the app drawer for a page of hidden apps, shown nowhere else, in no
-  search; optionally behind the fingerprint (`BiometricPrompt`). Android
-  15's Private space shows there too when the phone has one.
-- Gestures: swipe down for notifications (`StatusBarManager` expand via
-  reflection is unreliable: use the accessibility-free
-  `expandNotificationsPanel` call or the system gesture), double-tap to
-  lock (DevicePolicy is heavy: use an accessibility action only if the
-  owner turns it on).
-- Check early on the S24 (owner installs): One UI gesture navigation and
-  Recents with a third-party launcher. Write what works and what doesn't
-  here.
-- Widgets: hosting (`AppWidgetHost`) is Stage 6; the owner's word widget
-  goes away (Stage 2 replaces it).
+Shipped 2026-11-11 (see Status): HOME activity and the `ROLE_HOME` ask;
+every profile's apps cached from `LauncherApps`; pinned row (drag to
+reorder, drop on another for a folder, a hold dropped back opens the
+menu); swipe-up drawer with search (apps, contacts, settings pages,
+calculator, units; Enter launches the top app); app shortcuts on a hold
+and pinned on home; hidden apps live only in the hidden space (swipe
+right in the drawer, fingerprint when set; a Private space profile shows
+there too, locked ones with an Unlock row); swipe down pulls the shade
+(status-bar call, verified on the emulator); double-tap to lock through
+a small accessibility service, only when turned on. Still open from this
+stage: the S24 check (One UI gesture navigation and Recents with a
+third-party launcher) — that needs the owner's phone. Widgets stay
+Stage 6.
 
 ## Stage 2: learning words on the home screen
 
@@ -157,5 +142,25 @@ turns it on. Never blocks: a second tap on the icon goes straight through.
 
 ## Status
 
-Nothing built yet (2026-11-11). The launcher starts after ccez-keys' phone
-overlay run and its FSRS work.
+Stage 1 shipped 2026-11-11 (first tagged release; one release per stage).
+Everything under "Stage 1" above and "Built in from the start" is in:
+settings in one watched JSON with `scripts/launcher.ts get|set|log|dump`
+over adb (shell-only ContentProvider), layout backup/restore validated
+before writing (tested round-trip and bad-backup rejection on the
+emulator), self-update from GitHub releases (`updates.self`, off unless
+set), edge-to-edge + predictive back, adaptive columns and a beside-home
+drawer in wide landscape, TalkBack labels, large-font checked. Perf on
+launcher_avd (arm64 emulator, software rendering, busy host — tripwire
+numbers only): Macrobenchmark cold median 471 ms (min 388),
+return-to-home median 180 ms (min 109); `am start -W` best 256 ms /
+61 ms on a quiet run. Baseline in `perf-baseline.json` (700 / 150 ms,
+gate at +25% in `scripts/perf.sh`); replace with S24 numbers on the
+owner's install. Gates run 2026-11-11: unit tests, 10 instrumented
+tests, screenshots in `screenshots/`, perf — all green on launcher_avd.
+Notes: the overlay truce is launcher-side only (it broadcasts
+`HOME_VISIBLE` to uk.ccez.keys and reports `home_visible` in status);
+the keys overlay still needs its own front-app check for
+uk.ccez.launcher, in that repo. Private space and the second profile
+are coded but untested here (this emulator has neither). The S24
+One UI/Recents check and the "delete the word widget" call wait on the
+owner's install. Next: Stage 2.

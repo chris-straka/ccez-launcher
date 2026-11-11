@@ -1,5 +1,6 @@
 {
-  "device": "launcher_avd (arm64 emulator, android-36), release build",
-  "cold_ms": 500,
+  "device": "launcher_avd (arm64 emulator, android-36, software rendering), release build, busy host: regression tripwire only. Replace with S24 numbers when the owner installs.",
+  "macrobenchmark": "cold median 471 ms (min 388), return-home median 180 ms (min 109), 2026-11-11",
+  "cold_ms": 700,
   "home_ms": 150
 }
