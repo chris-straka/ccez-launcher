@@ -7,7 +7,10 @@ plugins {
 // the sibling checkout exactly as ccez-keys/android builds it. Build outputs
 // stay in this repo (CARGO_TARGET_DIR below), and --locked keeps cargo from
 // touching the core's Cargo.lock: that repo is never written from here.
-val coreDir = rootProject.layout.projectDirectory.dir("../ccez-keys/core")
+// CCEZ_KEYS_DIR points at another checkout (a clean worktree at a commit
+// while the sibling has work in progress).
+val coreDir = System.getenv("CCEZ_KEYS_DIR")?.let { rootProject.layout.projectDirectory.dir(it).dir("core") }
+    ?: rootProject.layout.projectDirectory.dir("../ccez-keys/core")
 val rustJniLibs = layout.buildDirectory.dir("rustJniLibs")
 val uniffiKotlin = layout.buildDirectory.dir("generated/uniffi")
 val coreInputs = listOf("src", "Cargo.toml", "uniffi.toml")
