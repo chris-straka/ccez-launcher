@@ -152,6 +152,17 @@ isn't installed there.
 
 ## Status
 
+2026-11-12, branch `look` (not merged, waiting on the owner's yes): one
+refined look. One grid (20 dp margins; dock and drawer icons land on
+them), a thin left-aligned clock, filled pill fields for Search and Ask,
+six pins in one row on a phone (`dockColumns`), search results with app
+icons and the kind on the right, quiet hairline-split app menu with the
+app's icon, word cards with lighter chips, home words that wrap their
+meaning on screen and keep apart (spacing follows the font size), and the
+drawer rising in and sinking out. Behaviour and gestures unchanged; all
+gates passed on launcher_avd (23 instrumented tests), goldens updated
+except `home-widget.png` and `gate.png` (unchanged screens' code).
+
 2026-11-12, from the owner's S24: the drawer no longer focuses search or
 raises the keyboard on open, and a swipe up on the pinned row, the Ask
 field or the Continue strip opens the drawer as on empty home (a hold
