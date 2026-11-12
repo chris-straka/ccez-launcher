@@ -25,6 +25,11 @@ object AgentCommands {
     const val EXTRA_SCREEN = "uk.ccez.launcher.SCREEN"
 
     fun run(app: App, method: String, args: JSONObject): String {
+        // Called just after a restart (an update, a crash), the app list may
+        // still be loading: every app read "not installed" (2026-11-12). Wait
+        // for it, briefly, before answering.
+        val until = System.currentTimeMillis() + 5_000
+        while (!app.apps.loaded.value && System.currentTimeMillis() < until) Thread.sleep(50)
         val result = when (method) {
             "apps" -> apps(app, args.optString("q"))
             "pins" -> pins(app)
