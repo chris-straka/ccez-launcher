@@ -51,27 +51,18 @@ stage: the S24 check (One UI gesture navigation and Recents with a
 third-party launcher) — that needs the owner's phone. Widgets stay
 Stage 6.
 
-## Stage 2: learning words on the home screen
+## Stage 2: learning words on the home screen — shipped
 
-The Mac app's "words on screen" (`ccez-keys/desktop/src/float.rs`,
-`review.rs`), on home: learning words drift into the empty parts of the
-home screen (not over the dock, the pinned row or the clock), a few at a
-time, the owner's languages taking turns. Settings: how many words (1–12,
-off) and how many languages (all, 1…n), as on the Mac.
-
-- Faint until touched; a touch shows the meaning under the word without
-  moving it (no layout jump). Meanings: the dictionary's first sense,
-  form lines ("inflection of pencher") replaced by the base word's
-  meaning, "[with à]" shown as part of the word ("parvenir à"), labels
-  like "(transitive)" as small tags ("tr"). Port the rules from
-  `desktop/src/cards.rs` (`short_gloss`, `tags_of`, `form_of`) into the core
-  so the Mac and the launcher share them.
-- Anki on the fingers: tap = Good, long-press = Again (meaning shown a
-  moment, back in 2 min), double-tap = Easy. The schedule is `review.rs`'s
-  (10 min, 1 h, 1 d, 3 d, 7 d, 21 d, 60 d). Move `review.rs` into the core
-  and keep its state in the ccez-words store, so a word graded on the Mac
-  isn't asked again on the phone.
-- Fade in slowly (2 s), never fade under a finger, leave after 90 s.
+Shipped 2026-11-11: words in the empty part of home from the core's
+`screen_words` (gloss rules and FSRS already in the core; the launcher
+calls `screenWords`/`gradeScreenWord` as they are). Faint, in over 2 s,
+out after 90 s (never under a finger — a held word shows its meaning);
+tap Good, hold Again, double-tap Easy; grades sync through ccez-words
+(`words.server` setting; `launcher sync`); dictionaries download per
+language from the ccez-lang-core release, checked by SHA-256.
+Settings: `words.count` (0–12) and `words.langs`, mirrored into the
+core. Verified on launcher_avd with a live French dictionary
+("parvenir à" → "to reach").
 
 ## Stage 3: search is also a dictionary
 
@@ -163,4 +154,7 @@ the keys overlay still needs its own front-app check for
 uk.ccez.launcher, in that repo. Private space and the second profile
 are coded but untested here (this emulator has neither). The S24
 One UI/Recents check and the "delete the word widget" call wait on the
-owner's install. Next: Stage 2.
+owner's install.
+
+Stage 2 shipped 2026-11-11: home words with meanings and grades through
+the core (see above). 11 instrumented tests green. Next: Stage 3.
