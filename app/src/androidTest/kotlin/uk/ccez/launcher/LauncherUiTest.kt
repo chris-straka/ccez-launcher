@@ -29,6 +29,9 @@ class LauncherUiTest {
             val ui = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
             ui.executeShellCommand("cmd role add-role-holder android.app.role.HOME uk.ccez.launcher").close()
             ui.executeShellCommand("pm grant uk.ccez.launcher android.permission.READ_CONTACTS").close()
+            // Plain names and clock while screens are under test.
+            App.instance.settings.set("words.app_name_langs", "false")
+            App.instance.settings.set("words.clock_lang", "false")
         }
     }
 
@@ -115,23 +118,25 @@ class LauncherUiTest {
     @Test fun aLearningWordShowsOnHomeAndTapGradesItAway() {
         val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         val e = Words.engine(ctx)
-        e.setWordStatus("fr", "zztestword", uk.ccez.keys.core.WordStatus.LEARNING)
+        // A fresh word each run: a graded word keeps its FSRS card (not due for days).
+        val word = "zz${System.nanoTime() % 100_000}mot"
+        e.setWordStatus("fr", word, uk.ccez.keys.core.WordStatus.LEARNING)
         // Room for every due word, this one included.
         App.instance.settings.set("words.count", "12")
         App.instance.settingsChanged()
         try {
             rule.waitUntil(timeoutMillis = 20_000) {
-                rule.onAllNodesWithText("zztestword").fetchSemanticsNodes().isNotEmpty()
+                rule.onAllNodesWithText(word).fetchSemanticsNodes().isNotEmpty()
             }
-            rule.onNodeWithText("zztestword").performClick()
+            rule.onNodeWithText(word).performClick()
             rule.waitUntil(timeoutMillis = 10_000) {
-                rule.onAllNodesWithText("zztestword").fetchSemanticsNodes().isEmpty()
+                rule.onAllNodesWithText(word).fetchSemanticsNodes().isEmpty()
             }
             // Graded Good: the core no longer offers it right away.
             val due = Words.screenWords(ctx, emptyList()).map { it.word }
-            org.junit.Assert.assertFalse("graded word not due again", "zztestword" in due)
+            org.junit.Assert.assertFalse("graded word not due again", word in due)
         } finally {
-            e.setWordStatus("fr", "zztestword", uk.ccez.keys.core.WordStatus.NEW)
+            e.setWordStatus("fr", word, uk.ccez.keys.core.WordStatus.NEW)
             App.instance.settings.set("words.count", "4")
             App.instance.settingsChanged()
         }
@@ -159,7 +164,8 @@ class LauncherUiTest {
     @Test fun aGatedAppAsksOneWordFirst() {
         val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         val e = Words.engine(ctx)
-        e.setWordStatus("fr", "gatezzword", uk.ccez.keys.core.WordStatus.LEARNING)
+        val gateWord = "gatezz${System.nanoTime() % 100_000}mot"
+        e.setWordStatus("fr", gateWord, uk.ccez.keys.core.WordStatus.LEARNING)
         App.instance.settings.set("words.count", "12")
         App.instance.settingsChanged()
         val camera = App.instance.apps.apps.value.firstOrNull { it.label == "Camera" }
@@ -186,9 +192,33 @@ class LauncherUiTest {
             org.junit.Assert.assertTrue("one fewer word due after Good", graded)
         } finally {
             App.instance.layout.update { it.gates.remove(camera!!.key) }
-            e.setWordStatus("fr", "gatezzword", uk.ccez.keys.core.WordStatus.NEW)
+            e.setWordStatus("fr", gateWord, uk.ccez.keys.core.WordStatus.NEW)
             App.instance.settings.set("words.count", "4")
             App.instance.settingsChanged()
+        }
+    }
+
+    @Test fun theLatestCopyShowsAsAWordToSave() {
+        val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val ready = kotlinx.coroutines.runBlocking { Dictionaries.ensure(ctx, "fr") || Dictionaries.ready(ctx, "fr") }
+        org.junit.Assume.assumeTrue("French dictionary needs the network", ready)
+        val e = Words.engine(ctx)
+        e.setWordStatus("fr", "libre", uk.ccez.keys.core.WordStatus.NEW)
+        val cm = ctx.getSystemService(android.content.ClipboardManager::class.java)
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("", "libre"))
+        // Home reads the copy when it comes back to the front.
+        rule.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.STARTED)
+        rule.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+        try {
+            rule.waitUntil(timeoutMillis = 15_000) {
+                rule.onAllNodesWithTag("clip-strip").fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithTag("clip-save").performClick()
+            rule.waitUntil(timeoutMillis = 10_000) {
+                e.wordStatus("fr", "libre") == uk.ccez.keys.core.WordStatus.LEARNING
+            }
+        } finally {
+            e.setWordStatus("fr", "libre", uk.ccez.keys.core.WordStatus.NEW)
         }
     }
 

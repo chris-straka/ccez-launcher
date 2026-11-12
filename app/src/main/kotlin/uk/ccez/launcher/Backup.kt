@@ -1,5 +1,6 @@
 package uk.ccez.launcher
 
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /**
@@ -38,6 +39,8 @@ object Backup {
             throw WriteFailed(e)
         }
         app.settingsChanged()
+        // Widget ids travel badly across phones: rebind by provider or drop.
+        app.scope.launch { runCatching { Widgets.validate(app) } }
         return "restored settings=${checked != null} layout=${layout != null} from ${o.optString("version")}"
     }
 }

@@ -45,6 +45,17 @@ sealed class Pin {
 
 data class Folder(val id: String, var name: String, val items: MutableList<Pin>)
 
+/** A hosted widget (Stage 6): its system id and provider, in home order. */
+data class WidgetEntry(val appWidgetId: Int, val pkg: String, val cls: String) {
+    fun toJson(): JSONObject =
+        JSONObject().put("id", appWidgetId).put("pkg", pkg).put("cls", cls)
+
+    companion object {
+        fun parse(o: JSONObject): WidgetEntry =
+            WidgetEntry(o.getInt("id"), o.getString("pkg"), o.getString("cls"))
+    }
+}
+
 /**
  * The layout as one JSON file (files/launcher/layout.json): pins in
  * order, folders, hidden apps (the hidden space's; shown nowhere else,
@@ -57,6 +68,7 @@ data class LayoutData(
     val hidden: MutableSet<String> = mutableSetOf(),
     val gates: MutableSet<String> = mutableSetOf(),
     var nextFolder: Int = 1,
+    val widgets: MutableList<WidgetEntry> = mutableListOf(),
 ) {
     fun toJson(): String {
         val o = JSONObject()
@@ -70,6 +82,7 @@ data class LayoutData(
         o.put("hidden", JSONArray(hidden.toList()))
         o.put("gates", JSONArray(gates.toList()))
         o.put("nextFolder", nextFolder)
+        o.put("widgets", JSONArray().apply { widgets.forEach { put(it.toJson()) } })
         return o.toString(2)
     }
 
@@ -111,6 +124,8 @@ data class LayoutData(
                 d.gates.add(s)
             }
             d.nextFolder = o.optInt("nextFolder", 1).coerceAtLeast(1)
+            val widgets = o.optJSONArray("widgets") ?: JSONArray()
+            for (i in 0 until widgets.length()) d.widgets.add(WidgetEntry.parse(widgets.getJSONObject(i)))
             return d
         }
     }
@@ -150,6 +165,7 @@ class LayoutStore(dir: File, private val log: LauncherLog) {
             d.hidden.toMutableSet(),
             d.gates.toMutableSet(),
             d.nextFolder,
+            d.widgets.toMutableList(),
         )
     }
 

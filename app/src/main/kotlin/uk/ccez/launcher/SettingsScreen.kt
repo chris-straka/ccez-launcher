@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 @Composable fun SettingsScreen(
     onBack: () -> Unit,
     onSetHome: () -> Unit,
+    onAddWidget: () -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
     val app = App.instance
@@ -77,6 +78,11 @@ import androidx.compose.ui.unit.sp
                     runCatching {
                         ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                     }
+                }
+            }
+            item {
+                SettingAction("Add widget", "", "setting-widget") {
+                    onAddWidget()
                 }
             }
             item {

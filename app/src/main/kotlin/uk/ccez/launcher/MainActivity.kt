@@ -102,6 +102,7 @@ class MainActivity : FragmentActivity() {
                         else -> SettingsScreen(
                             onBack = { screen = Screen.HOME },
                             onSetHome = { requestHomeRole(this@MainActivity) },
+                            onAddWidget = { startAddWidget() },
                         )
                     }
                 }
@@ -140,6 +141,84 @@ class MainActivity : FragmentActivity() {
         screen = Screen.HOME
         menuTarget = null
         gateWord = null
+    }
+
+    private var pendingWidgetId: Int = android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID
+
+    private val pickWidget = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val id = r.data?.getIntExtra(
+            android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_ID,
+            android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID,
+        ) ?: pendingWidgetId
+        if (r.resultCode == android.app.Activity.RESULT_OK && id != android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID) {
+            afterPickWidget(id)
+            // pendingWidgetId stays set only while configuring (afterPickWidget owns it).
+            if (pendingWidgetId == id && Widgets.info(this, WidgetEntry(id, "", ""))?.configure == null) {
+                pendingWidgetId = android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID
+            }
+        } else if (pendingWidgetId != android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID) {
+            runCatching { Widgets.host(this).deleteAppWidgetId(pendingWidgetId) }
+            pendingWidgetId = android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID
+        }
+    }
+
+    private val configureWidget = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val id = pendingWidgetId
+        pendingWidgetId = android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID
+        if (r.resultCode == android.app.Activity.RESULT_OK && id != android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID) {
+            Widgets.addAllocated(this, id)
+            screen = Screen.HOME
+        } else if (id != android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID) {
+            runCatching { Widgets.host(this).deleteAppWidgetId(id) }
+        }
+    }
+
+    /** Settings → Add widget: pick one, bind it, configure it if it asks. */
+    fun startAddWidget() {
+        pendingWidgetId = Widgets.host(this).allocateAppWidgetId()
+        val pick = Intent(android.appwidget.AppWidgetManager.ACTION_APPWIDGET_PICK)
+            .putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_ID, pendingWidgetId)
+        runCatching { pickWidget.launch(pick) }
+            .onFailure { App.instance.launcherLog.log("warn", "widget-pick-failed", "error" to it.toString()) }
+    }
+
+    private fun afterPickWidget(id: Int) {
+        val mgr = Widgets.manager(this)
+        val info = runCatching { mgr.getAppWidgetInfo(id) }.getOrNull()
+        if (info == null) {
+            // Picked but not bound yet: ask Android to bind it for us.
+            // The pick result carries the provider Android chose... if it
+            // didn't bind, there's nothing to host; drop the id.
+            runCatching { Widgets.host(this).deleteAppWidgetId(id) }
+            App.instance.launcherLog.log("warn", "widget-not-bound")
+            return
+        }
+        val configure = info.configure
+        if (configure != null) {
+            pendingWidgetId = id
+            val intent = Intent(android.appwidget.AppWidgetManager.ACTION_APPWIDGET_CONFIGURE)
+                .setComponent(configure)
+                .putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+            runCatching { configureWidget.launch(intent) }
+                .onFailure {
+                    pendingWidgetId = android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID
+                    Widgets.addAllocated(this, id)
+                    screen = Screen.HOME
+                }
+        } else {
+            Widgets.addAllocated(this, id)
+            screen = Screen.HOME
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        Widgets.startListening(this)
+    }
+
+    override fun onStop() {
+        Widgets.stopListening(this)
+        super.onStop()
     }
 
     override fun onResume() {
