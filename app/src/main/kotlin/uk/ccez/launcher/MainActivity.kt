@@ -10,6 +10,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -27,6 +36,23 @@ import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.delay
 
 enum class Screen { HOME, DRAWER, SETTINGS }
+
+/**
+ * The drawer rises a little as it fades in and sinks back as it goes;
+ * home just fades under it. Short: the swipe already said where it goes.
+ */
+fun screenMotion(from: Screen, to: Screen): ContentTransform {
+    val ease = FastOutSlowInEasing
+    return when {
+        to == Screen.DRAWER ->
+            (fadeIn(tween(200, easing = ease)) + slideInVertically(tween(260, easing = ease)) { it / 14 }) togetherWith
+                fadeOut(tween(120))
+        from == Screen.DRAWER ->
+            fadeIn(tween(200, delayMillis = 40)) togetherWith
+                (fadeOut(tween(150, easing = ease)) + slideOutVertically(tween(200, easing = ease)) { it / 20 })
+        else -> fadeIn(tween(180)) togetherWith fadeOut(tween(120))
+    }
+}
 
 /** The HOME activity: home, drawer (swipe up), settings (hold on empty home). */
 class MainActivity : FragmentActivity() {
@@ -85,25 +111,33 @@ class MainActivity : FragmentActivity() {
                                 )
                             }
                         }
-                        screen == Screen.HOME -> HomeScreen(
-                            onOpenDrawer = { screen = Screen.DRAWER },
-                            onOpenSettings = { screen = Screen.SETTINGS },
-                            onSetHome = { requestHomeRole(this@MainActivity) },
-                            onShade = { expandShade() },
-                            onDoubleTap = { doubleTapLock() },
-                            onLaunch = launch,
-                            onMenu = openMenu,
-                        )
-                        screen == Screen.DRAWER -> DrawerScreen(
-                            onClose = { screen = Screen.HOME },
-                            onLaunch = launch,
-                            onMenu = openMenu,
-                        )
-                        else -> SettingsScreen(
-                            onBack = { screen = Screen.HOME },
-                            onSetHome = { requestHomeRole(this@MainActivity) },
-                            onAddWidget = { startAddWidget() },
-                        )
+                        else -> AnimatedContent(
+                            targetState = screen,
+                            transitionSpec = { screenMotion(initialState, targetState) },
+                            label = "screen",
+                        ) { s ->
+                            when (s) {
+                                Screen.HOME -> HomeScreen(
+                                    onOpenDrawer = { screen = Screen.DRAWER },
+                                    onOpenSettings = { screen = Screen.SETTINGS },
+                                    onSetHome = { requestHomeRole(this@MainActivity) },
+                                    onShade = { expandShade() },
+                                    onDoubleTap = { doubleTapLock() },
+                                    onLaunch = launch,
+                                    onMenu = openMenu,
+                                )
+                                Screen.DRAWER -> DrawerScreen(
+                                    onClose = { screen = Screen.HOME },
+                                    onLaunch = launch,
+                                    onMenu = openMenu,
+                                )
+                                Screen.SETTINGS -> SettingsScreen(
+                                    onBack = { screen = Screen.HOME },
+                                    onSetHome = { requestHomeRole(this@MainActivity) },
+                                    onAddWidget = { startAddWidget() },
+                                )
+                            }
+                        }
                     }
                 }
                 gateWord?.let { g -> GateDialog(g) }
