@@ -82,14 +82,17 @@ straight through) — then the app opens. A slow word fetch never holds
 the launch up (800 ms at most). Needs home words on (`words.count`),
 since both come from the core's one screen-words call.
 
-## Stage 5: the launcher speaks the languages
+## Stage 5: the launcher speaks the languages — shipped
 
-- App names in the learning languages ("Paramètres", "Kamera", カメラ):
-  translated once with ML Kit on the phone, cached; they rotate through the
-  languages daily; a hold shows the usual name.
-- The clock and date written out in a learning language ("Il est quinze
-  heures douze", "mercredi onze novembre"), tap to hear it (the phone's TTS,
-  muted in tests).
+Shipped 2026-11-11 (`words.app_name_langs`, `words.clock_lang`): app
+names translated once with ML Kit and cached (`app-names.json`),
+rotating daily through the learning languages; a hold's menu keeps the
+usual name, and search matches either. The clock and date written out
+in the day's language; a tap says them (phone TTS, best voice, never
+started in tests). Numbers 0–59 are spelled with small tables for 14
+languages (ICU spellout is not in the public SDK and reflection to it
+is blocked — checked on the emulator); other languages keep digits,
+their weekday and month still localized.
 
 ## Stage 6: strips and widgets
 
@@ -164,5 +167,5 @@ owner's install.
 Stage 2 shipped 2026-11-11: home words with meanings and grades through
 the core (see above). Stage 3 shipped the same day: word cards in
 search. Stage 4 shipped the same day: word gates before chosen apps
-(verified with YouTube on the emulator). 13 instrumented tests green.
-Next: Stage 5.
+(verified with YouTube on the emulator). Stage 5 shipped the same
+day: language-of-the-day names and clock. Next: Stage 6.
