@@ -1,5 +1,6 @@
 package uk.ccez.launcher
 
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -42,5 +43,23 @@ class SearchLogicTest {
         assertEquals(4, columnsFor(320))
         assertEquals(5, columnsFor(411))
         assertEquals(8, columnsFor(1200))
+    }
+
+    @Test fun sixPinsSitInOneRowOnAPhone() {
+        assertEquals(6, dockColumns(411, 6))
+        assertEquals(6, dockColumns(384, 6))
+        assertEquals(5, dockColumns(411, 5))
+        assertEquals(5, dockColumns(411, 9))
+        // Too narrow for six 64 dp cells: five and a second row.
+        assertEquals(4, dockColumns(320, 6))
+    }
+
+    @Test fun gridEdgesLandOnTheMargin() {
+        for ((w, c) in listOf(411 to 5, 411 to 6, 384 to 6, 800 to 10)) {
+            val pad = Look.gridPad(w.dp, c).value
+            val cell = (w - 2 * pad) / c
+            val iconLeft = pad + (cell - Look.icon.value) / 2
+            assertEquals("width $w, $c columns", Look.margin.value, iconLeft, 0.5f)
+        }
     }
 }
