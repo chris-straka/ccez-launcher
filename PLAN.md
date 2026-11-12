@@ -40,8 +40,11 @@ with a release the owner can install.
 Shipped 2026-11-11 (see Status): HOME activity and the `ROLE_HOME` ask;
 every profile's apps cached from `LauncherApps`; pinned row (drag to
 reorder, drop on another for a folder, a hold dropped back opens the
-menu); swipe-up drawer with search (apps, contacts, settings pages,
-calculator, units; Enter launches the top app); app shortcuts on a hold
+menu); swipe up anywhere on home (over the pins, the strips and the Ask
+field too; a hold is the pin's lift, never the drawer) opens the drawer
+with search (apps, contacts, settings pages, calculator, units; Enter
+launches the top app). Opening the drawer leaves search unfocused and
+the keyboard down; a tap on the field brings both (owner, 2026-11-12); app shortcuts on a hold
 and pinned on home; hidden apps live only in the hidden space (swipe
 right in the drawer, fingerprint when set; a Private space profile shows
 there too, locked ones with an Unlock row); swipe down pulls the shade
@@ -148,6 +151,12 @@ isn't installed there.
 - Anything that needs Google Play services.
 
 ## Status
+
+2026-11-12, from the owner's S24: the drawer no longer focuses search or
+raises the keyboard on open, and a swipe up on the pinned row, the Ask
+field or the Continue strip opens the drawer as on empty home (a hold
+still lifts a pin). UI tests for both (`HomeGesturesTest`), all gates
+passed on launcher_avd.
 
 2026-11-11, after the build: rebuilt on ccez-keys 9f87bb3, so words are
 saved and looked up by their dictionary headword (ccez-words/PLAN.md) and
