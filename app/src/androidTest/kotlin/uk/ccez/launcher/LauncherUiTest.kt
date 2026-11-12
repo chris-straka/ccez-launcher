@@ -156,6 +156,42 @@ class LauncherUiTest {
         }
     }
 
+    @Test fun aGatedAppAsksOneWordFirst() {
+        val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val e = Words.engine(ctx)
+        e.setWordStatus("fr", "gatezzword", uk.ccez.keys.core.WordStatus.LEARNING)
+        App.instance.settings.set("words.count", "12")
+        App.instance.settingsChanged()
+        val camera = App.instance.apps.apps.value.firstOrNull { it.label == "Camera" }
+        org.junit.Assume.assumeTrue("needs Camera", camera != null)
+        App.instance.layout.update { it.gates.add(camera!!.key) }
+        try {
+            rule.onNodeWithTag("app:${camera!!.key}").performClick()
+            rule.waitUntil(timeoutMillis = 15_000) {
+                rule.onAllNodesWithTag("gate").fetchSemanticsNodes().isNotEmpty()
+            }
+            val dueBefore = Words.screenWords(ctx, emptyList()).map { it.word }
+            rule.onNodeWithTag("gate-good").performClick()
+            // The app opens over us; the core tells whether the grade landed.
+            val deadline = System.currentTimeMillis() + 10_000
+            var graded = false
+            while (System.currentTimeMillis() < deadline) {
+                val dueAfter = Words.screenWords(ctx, emptyList()).map { it.word }
+                if (dueAfter.size < dueBefore.size) {
+                    graded = true
+                    break
+                }
+                Thread.sleep(250)
+            }
+            org.junit.Assert.assertTrue("one fewer word due after Good", graded)
+        } finally {
+            App.instance.layout.update { it.gates.remove(camera!!.key) }
+            e.setWordStatus("fr", "gatezzword", uk.ccez.keys.core.WordStatus.NEW)
+            App.instance.settings.set("words.count", "4")
+            App.instance.settingsChanged()
+        }
+    }
+
     @Test fun longPressOnEmptyHomeOpensSettings() {
         rule.onNodeWithTag("home-empty").performTouchInput { longClick() }
         rule.onNodeWithTag("settings").assertIsDisplayed()

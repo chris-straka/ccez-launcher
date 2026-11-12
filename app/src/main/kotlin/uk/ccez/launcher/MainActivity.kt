@@ -105,7 +105,7 @@ class MainActivity : FragmentActivity() {
                         )
                     }
                 }
-                gateWord?.let { g -> GateWordDialog(g) }
+                gateWord?.let { g -> GateDialog(g) }
             }
 
             menuTarget?.let { target ->
