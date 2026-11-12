@@ -64,11 +64,14 @@ Settings: `words.count` (0–12) and `words.langs`, mirrored into the
 core. Verified on launcher_avd with a live French dictionary
 ("parvenir à" → "to reach").
 
-## Stage 3: search is also a dictionary
+## Stage 3: search is also a dictionary — shipped
 
-Typing in home search shows matching apps and, for a word in any of the
-learning languages, its word card (meaning, forms, gender, reading) with
-Learning / Known, as the keyboard's card does.
+Shipped 2026-11-11: search also asks the core's `word_card` (learning
+languages in the owner's order, first hit): headword as the lemma with
+the typed form under it, article, gender, reading, parts of speech,
+meanings with More for the rest, Learning / Known toggles by lemma,
+synced like the keyboard's card. A language without its dictionary yet
+simply shows no card (`launcher sync <lang>` fetches it).
 
 ## Stage 4: a word before a time-sink app
 
@@ -157,4 +160,5 @@ One UI/Recents check and the "delete the word widget" call wait on the
 owner's install.
 
 Stage 2 shipped 2026-11-11: home words with meanings and grades through
-the core (see above). 11 instrumented tests green. Next: Stage 3.
+the core (see above). Stage 3 shipped the same day: word cards in
+search. 12 instrumented tests green. Next: Stage 4.
