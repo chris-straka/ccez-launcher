@@ -118,8 +118,10 @@ class LauncherUiTest {
     @Test fun aLearningWordShowsOnHomeAndTapGradesItAway() {
         val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         val e = Words.engine(ctx)
-        // A fresh word each run: a graded word keeps its FSRS card (not due for days).
-        val word = "zz${System.nanoTime() % 100_000}mot"
+        // A real word (the core saves nothing it can't find in the
+        // dictionary), a different one most runs: a graded word keeps its
+        // FSRS card and isn't due again for a while.
+        val word = freshWord()
         e.setWordStatus("fr", word, uk.ccez.keys.core.WordStatus.LEARNING)
         // Room for every due word, this one included.
         App.instance.settings.set("words.count", "12")
@@ -164,7 +166,7 @@ class LauncherUiTest {
     @Test fun aGatedAppAsksOneWordFirst() {
         val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         val e = Words.engine(ctx)
-        val gateWord = "gatezz${System.nanoTime() % 100_000}mot"
+        val gateWord = freshWord()
         e.setWordStatus("fr", gateWord, uk.ccez.keys.core.WordStatus.LEARNING)
         App.instance.settings.set("words.count", "12")
         App.instance.settingsChanged()
@@ -227,4 +229,15 @@ class LauncherUiTest {
         rule.onNodeWithTag("settings").assertIsDisplayed()
         rule.onNodeWithTag("setting:words.count").assertIsDisplayed()
     }
+
+    /** A common French word picked at random: the core keeps only words its
+     * dictionary knows, and one graded in an earlier run may not be due. */
+    private fun freshWord(): String = listOf(
+        "maison", "fenêtre", "cuisine", "voiture", "chemin", "montagne", "rivière", "forêt", "nuage", "orage",
+        "jardin", "village", "marché", "boulanger", "fromage", "poisson", "cerise", "citron", "farine", "beurre",
+        "bouteille", "chaise", "armoire", "couteau", "fourchette", "assiette", "serviette", "oreiller", "couverture", "lampe",
+        "écharpe", "manteau", "chaussure", "chapeau", "ceinture", "parapluie", "valise", "billet", "gare", "avion",
+        "bateau", "vélo", "camion", "moteur", "roue", "pont", "tunnel", "colline", "plage", "sable",
+        "falaise", "étoile", "lune", "soleil", "printemps", "automne", "hiver", "glace", "neige", "vent",
+    ).random()
 }
