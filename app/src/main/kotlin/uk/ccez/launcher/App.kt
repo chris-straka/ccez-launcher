@@ -40,7 +40,9 @@ class App : Application() {
             previous?.uncaughtException(t, e)
         }
         launcherLog.log("info", "start", "version" to BuildConfig.VERSION_NAME)
+        Today.load(this)
         apps.start()
+        scope.launch { runCatching { Widgets.validate(this@App) } }
         seedPinsOnce()
         // The word core wakes up after home does.
         scope.launch {

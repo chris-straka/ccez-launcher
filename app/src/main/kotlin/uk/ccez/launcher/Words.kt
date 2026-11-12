@@ -61,6 +61,7 @@ object Words {
 
     /** Tap Good, long-press Again, double-tap Easy — the core's schedule. */
     fun grade(ctx: Context, word: ScreenWord, grade: Grade, scope: CoroutineScope) {
+        Today.bump(ctx)
         scope.launch(Dispatchers.IO) {
             runCatching {
                 engine(ctx).gradeScreenWord(word.lang, word.word, grade)

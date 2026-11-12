@@ -166,6 +166,8 @@ fun pinDrop(store: LayoutStore, from: Int, to: Int) {
                 }
             }
         }
+        TodayStrip()
+        ClipStrip()
         Box(
             Modifier.weight(1f).fillMaxWidth().testTag("home-empty")
                 .pointerInput(Unit) {
@@ -194,6 +196,9 @@ fun pinDrop(store: LayoutStore, from: Int, to: Int) {
             // Learning words live here from Stage 2 (HomeWords.kt).
             HomeWordLayer(Modifier.fillMaxSize(), onLaunch = onLaunch)
         }
+        WidgetStrip()
+        TubeStrip(onLaunch = onLaunch)
+        LlmAskStrip()
         PinnedGrid(
             pins = layout.pins,
             folders = layout.folders,

@@ -124,6 +124,34 @@ object Dictionaries {
     }
 }
 
+/** Words reviewed here today (files/launcher/today.json): the Today strip. */
+object Today {
+    val reviewed = kotlinx.coroutines.flow.MutableStateFlow(0)
+    private var day = Long.MIN_VALUE
+
+    private fun file(ctx: Context): File = File(ctx.filesDir, "launcher/today.json")
+
+    @Synchronized fun load(ctx: Context) {
+        val today = java.time.LocalDate.now().toEpochDay()
+        val parsed = runCatching { org.json.JSONObject(file(ctx).readText()) }.getOrNull()
+        day = today
+        reviewed.value = if (parsed != null && parsed.optLong("day") == today) parsed.optInt("reviewed") else 0
+    }
+
+    @Synchronized fun bump(ctx: Context) {
+        val today = java.time.LocalDate.now().toEpochDay()
+        if (today != day) {
+            day = today
+            reviewed.value = 0
+        }
+        reviewed.value += 1
+        writeSafely(
+            file(ctx),
+            org.json.JSONObject().put("day", day).put("reviewed", reviewed.value).toString(),
+        )
+    }
+}
+
 /** Word statuses and the review schedule to and from ccez-words (the core syncs both). */
 object WordSync {
     private var last = 0L
