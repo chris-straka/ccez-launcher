@@ -107,12 +107,27 @@ import androidx.fragment.app.FragmentActivity
     }
 
     val privateUser = app.apps.privateUser
+    val shownNames by AppNames.shown.collectAsState()
     val visible = remember(apps, layout.hidden, privateUser) {
         apps.filter { it.key !in layout.hidden && it.user != privateUser }
     }
     val calc = remember(query) { Calc.eval(query) }
     val unit = remember(query) { Units.convert(query) }
-    val appHits = remember(visible, query) { appMatches(visible, query) }
+    // Search finds an app by its usual name or the name shown today.
+    val appHits = remember(visible, query, shownNames) {
+        if (query.isBlank()) {
+            emptyList()
+        } else {
+            val q = normalized(query)
+            visible.mapNotNull { e ->
+                val r = listOf(
+                    matchRank(e.label, q),
+                    matchRank(shownNames[e.key] ?: e.label, q),
+                ).filter { it >= 0 }.minOrNull()
+                r?.let { it to e }
+            }.sortedWith(compareBy({ it.first }, { normalized(it.second.label) })).map { it.second }
+        }
+    }
     val settingsHits = remember(query) { settingsMatches(query) }
     val wantContacts = remember(settingsTick) { app.settings.bool("search.contacts") }
     val contacts by produceState<List<ContactHit>>(emptyList(), query, wantContacts) {
@@ -157,6 +172,7 @@ import androidx.fragment.app.FragmentActivity
                             e,
                             onClick = { onLaunch(e); onClose() },
                             onLongClick = { onMenu(MenuTarget.DrawerApp(e)) },
+                            labelOverride = shownNames[e.key],
                         )
                     }
                 }
@@ -182,7 +198,7 @@ import androidx.fragment.app.FragmentActivity
                     }
                 }
                 items(appHits, key = { it.key }) { e ->
-                    ResultRow(e.label, if (e.otherProfile) "Work" else "", "result-app") {
+                    ResultRow(shownNames[e.key] ?: e.label, if (e.otherProfile) "Work" else "", "result-app") {
                         onLaunch(e)
                         onClose()
                     }

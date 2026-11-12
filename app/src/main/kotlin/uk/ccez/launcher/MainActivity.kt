@@ -155,6 +155,7 @@ class MainActivity : FragmentActivity() {
             )
         }
         Updater.maybe(this)
+        AppNames.maybeRefresh(this)
     }
 
     override fun onPause() {

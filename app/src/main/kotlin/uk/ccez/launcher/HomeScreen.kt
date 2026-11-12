@@ -82,7 +82,11 @@ fun pinDrop(store: LayoutStore, from: Int, to: Int) {
     }
 }
 
-@Composable fun ClockText(onTapClock: () -> Unit) {
+@Composable fun ClockText() {
+    val app = App.instance
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val settingsTick by app.settings.version.collectAsState()
+    val inLang = remember(settingsTick) { app.settings.bool("words.clock_lang") }
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -91,19 +95,48 @@ fun pinDrop(store: LayoutStore, from: Int, to: Int) {
             delay((60_000 - intoMinute).coerceAtLeast(250))
         }
     }
-    val time = remember(now) { now.format(DateTimeFormatter.ofPattern("H:mm")) }
-    val date = remember(now) {
-        now.format(DateTimeFormatter.ofPattern("EEEE d MMMM", java.util.Locale.ENGLISH))
+    // The learning language of the day, once the core is up.
+    val lang by androidx.compose.runtime.produceState<String?>(null, inLang) {
+        if (!inLang) return@produceState
+        repeat(24) {
+            val l = LangOfDay.todayFromCore()
+            if (l != null) {
+                value = l
+                return@produceState
+            }
+            delay(500)
+        }
+    }
+    val spoken = lang?.takeIf { inLang }
+    val time: String
+    val date: String
+    if (spoken != null) {
+        time = remember(now, spoken) { ClockWords.time(spoken, now) }
+        date = remember(now, spoken) { ClockWords.date(spoken, now.toLocalDate()) }
+    } else {
+        time = remember(now) { now.format(DateTimeFormatter.ofPattern("H:mm")) }
+        date = remember(now) {
+            now.format(DateTimeFormatter.ofPattern("EEEE d MMMM", java.util.Locale.ENGLISH))
+        }
     }
     Column(
-        Modifier.fillMaxWidth().padding(top = 28.dp, bottom = 4.dp)
-            .pointerInput(Unit) { detectTapGestures(onTap = { onTapClock() }) }
+        Modifier.fillMaxWidth().padding(top = 28.dp, bottom = 4.dp, start = 16.dp, end = 16.dp)
+            .pointerInput(spoken) {
+                detectTapGestures(onTap = {
+                    if (spoken != null) Speaker.say(ctx, "$time. $date", spoken)
+                })
+            }
             .semantics { contentDescription = "$time, $date" }
             .testTag("clock"),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(time, color = Palette.fg, fontSize = 56.sp, lineHeight = 58.sp)
-        Text(date, color = Palette.dim, fontSize = 16.sp)
+        Text(
+            time, color = Palette.fg,
+            fontSize = if (spoken != null) 30.sp else 56.sp,
+            lineHeight = if (spoken != null) 36.sp else 58.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        Text(date, color = Palette.dim, fontSize = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
 
@@ -125,7 +158,7 @@ fun pinDrop(store: LayoutStore, from: Int, to: Int) {
     var dragTotal by remember { mutableStateOf(0f) }
 
     Column(Modifier.fillMaxSize().background(Palette.bg).testTag("home")) {
-        if (showClock) ClockText(onTapClock = {})
+        if (showClock) ClockText()
         if (!isHome) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 TextButton(onClick = onSetHome, modifier = Modifier.testTag("set-home")) {
@@ -371,10 +404,12 @@ fun pinDrop(store: LayoutStore, from: Int, to: Int) {
     folders: Map<String, Folder>,
     byId: Map<AppId, AppEntry>,
 ) {
+    val shownNames by AppNames.shown.collectAsState()
     when (pin) {
         is Pin.App -> {
             val e = byId[pin.id]
             if (e != null) {
+                val shown = shownNames[e.key] ?: e.label
                 // Shown only: the grid's own gestures handle tap and lift.
                 Column(
                     Modifier.width(76.dp).padding(top = 8.dp, bottom = 6.dp)
@@ -385,7 +420,7 @@ fun pinDrop(store: LayoutStore, from: Int, to: Int) {
                 ) {
                     AppIconImage(e, Modifier.size(52.dp))
                     Text(
-                        e.label, color = Palette.fg, fontSize = 11.sp, lineHeight = 13.sp,
+                        shown, color = Palette.fg, fontSize = 11.sp, lineHeight = 13.sp,
                         maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
                         modifier = Modifier.width(72.dp),
                     )

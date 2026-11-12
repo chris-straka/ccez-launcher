@@ -22,6 +22,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -85,7 +86,9 @@ object Palette {
     modifier: Modifier = Modifier,
     labelOverride: String? = null,
 ) {
-    val label = labelOverride ?: entry.label
+    // The name in today's learning language when Stage 5 is on.
+    val shownNames by AppNames.shown.collectAsState()
+    val label = labelOverride ?: shownNames[entry.key] ?: entry.label
     Column(
         modifier
             .width(76.dp)
