@@ -12,6 +12,8 @@ shot() { adb -s "$SERIAL" exec-out screencap -p > "$OUT/$1.png"; echo "$1"; }
 home() { adb -s "$SERIAL" shell input keyevent KEYCODE_HOME; sleep 2; }
 home; shot home
 adb -s "$SERIAL" shell input swipe 540 1500 540 700 250; sleep 1; shot drawer
+# The drawer opens with search unfocused (2026-11-12): a tap on the field first.
+adb -s "$SERIAL" shell input tap 540 170; sleep 1
 adb -s "$SERIAL" shell input text "2+3*4"; sleep 1; shot search
 for i in 1 2 3 4 5; do adb -s "$SERIAL" shell input keyevent KEYCODE_DEL; done
 adb -s "$SERIAL" shell input swipe 200 1000 850 1000 250; sleep 1; shot hidden
