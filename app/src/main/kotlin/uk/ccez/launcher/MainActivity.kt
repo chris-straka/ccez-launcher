@@ -66,6 +66,7 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val app = App.instance
+        screen = screenAsked(intent)
         setContent {
             val layout by app.layout.data.collectAsState()
             val askContacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -171,10 +172,17 @@ class MainActivity : FragmentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        // The home button: back to home, menus away.
-        screen = Screen.HOME
+        // The home button: back to home, menus away. `launcher drawer`
+        // (AgentCommands) comes the same way, asking for the drawer.
+        screen = screenAsked(intent)
         menuTarget = null
         gateWord = null
+    }
+
+    private fun screenAsked(intent: Intent?): Screen {
+        val asked = intent?.getStringExtra(AgentCommands.EXTRA_SCREEN) ?: return Screen.HOME
+        App.instance.launcherLog.log("info", "screen", "asked" to asked)
+        return if (asked == "drawer") Screen.DRAWER else Screen.HOME
     }
 
     private var pendingWidgetId: Int = android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID

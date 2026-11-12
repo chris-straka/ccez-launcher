@@ -105,11 +105,18 @@ class Control : ContentProvider() {
                     }
                     JSONObject().put("core", e.version()).put("words", a).toString(2)
                 }
+                // The layout, for agents: apps, pins, pin, move, hide, folder, … (AgentCommands).
+                in AgentCommands.methods -> {
+                    val value = extras?.getString("value")?.let { String(Base64.decode(it, Base64.DEFAULT)) }
+                    AgentCommands.run(app, method, if (value.isNullOrBlank()) JSONObject() else JSONObject(value))
+                }
                 else -> error("no command called $method")
             }
             out.putString("out", b64(result))
         } catch (e: Exception) {
-            app.launcherLog.log("error", "control", "method" to method, "error" to e.toString())
+            // A refused agent command is said back and logged, not an app error.
+            val level = if (e is AgentError) "info" else "error"
+            app.launcherLog.log(level, "control", "method" to method, "error" to e.toString())
             out.putString("error", b64(e.message ?: e.toString()))
         }
         return out
