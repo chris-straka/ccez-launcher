@@ -149,6 +149,15 @@ isn't installed there.
 
 ## Status
 
+2026-11-11, after the build: rebuilt on ccez-keys 9f87bb3, so words are
+saved and looked up by their dictionary headword (ccez-words/PLAN.md) and
+cards show short form tags. Checked on launcher_avd by hand: drawer,
+search, calculator, hidden space and the app menu are this launcher's (the
+first screenshots were the emulator's own launcher: the connected tests
+uninstall the app, scripts/check.sh now reinstalls it before any shot);
+hiding an app leaves the open drawer at once; the clipboard is read once
+per copy. Installed on the owner's S24 as the home app.
+
 Stage 1 shipped 2026-11-11 (first tagged release; one release per stage).
 Everything under "Stage 1" above and "Built in from the start" is in:
 settings in one watched JSON with `scripts/launcher.ts get|set|log|dump`
