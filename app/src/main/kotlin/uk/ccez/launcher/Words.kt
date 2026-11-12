@@ -52,6 +52,13 @@ object Words {
         }.getOrDefault(emptyList())
     }
 
+    /** A word's status set on its card (Learning / Known / neither). */
+    fun setStatus(ctx: Context, lang: String, word: String, status: uk.ccez.keys.core.WordStatus, scope: CoroutineScope) {
+        scope.launch(Dispatchers.IO) {
+            runCatching { engine(ctx).setWordStatus(lang, word, status) }
+        }
+    }
+
     /** Tap Good, long-press Again, double-tap Easy — the core's schedule. */
     fun grade(ctx: Context, word: ScreenWord, grade: Grade, scope: CoroutineScope) {
         scope.launch(Dispatchers.IO) {

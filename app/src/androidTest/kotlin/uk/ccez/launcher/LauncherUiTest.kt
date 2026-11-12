@@ -3,6 +3,7 @@ package uk.ccez.launcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -133,6 +134,25 @@ class LauncherUiTest {
             e.setWordStatus("fr", "zztestword", uk.ccez.keys.core.WordStatus.NEW)
             App.instance.settings.set("words.count", "4")
             App.instance.settingsChanged()
+        }
+    }
+
+    @Test fun searchShowsAWordCardWithLearningAndKnown() {
+        val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val ready = kotlinx.coroutines.runBlocking { Dictionaries.ensure(ctx, "fr") || Dictionaries.ready(ctx, "fr") }
+        org.junit.Assume.assumeTrue("French dictionary needs the network", ready)
+        try {
+            rule.onNodeWithTag("home-empty").performTouchInput { swipeUp() }
+            rule.onNodeWithTag("search").performTextInput("libre")
+            rule.waitUntil(timeoutMillis = 15_000) {
+                rule.onAllNodesWithTag("word-card").fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithTag("word-known").performClick()
+            rule.waitUntil(timeoutMillis = 10_000) {
+                Words.engine(ctx).wordStatus("fr", "libre") == uk.ccez.keys.core.WordStatus.KNOWN
+            }
+        } finally {
+            Words.engine(ctx).setWordStatus("fr", "libre", uk.ccez.keys.core.WordStatus.NEW)
         }
     }
 
