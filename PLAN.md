@@ -123,6 +123,24 @@ isn't installed there.
   by `scripts/launcher.ts get|set|log|dump`. A log with context (what was
   tapped, which app, timings) readable the same way; user-facing errors
   stay a few plain words.
+- The layout too, without tapping through the app (owner, 2026-11-12):
+  `launcher apps [--json] [query]`, `pins`, `pin <app> [--at N]`,
+  `unpin <app|N>`, `move <app|N> <to>`, `hide`/`unhide <app>`, `hidden`,
+  `folder <name> <app>…`, `unfolder <name>`, `rename-folder <old> <new>`,
+  `gate <app> on|off`, `open <app>`, `home`, `drawer`, `shortcuts <app>`,
+  `pin-shortcut <app> <id|label>` (AgentCommands.kt, the pure part in
+  LayoutOps.kt). Each is one call, checked before anything is written,
+  logged as an `agent` event, and through `LayoutStore.update`, so the
+  open screen redraws at once. `<app>` is a label (any case, a unique
+  prefix), a package or a key; a name that fits several lists them and
+  changes nothing; only installed apps pin. `open` skips the word gate.
+- From any tailnet computer: adb is the route, no server. Wireless
+  debugging on the phone, reached over the tailnet:
+  `LAUNCHER_SERIAL=<phone tailnet address>:<port> bun scripts/launcher.ts …`
+  runs `adb connect` first when needed. z is paired already; the address
+  and port live outside this repo (the port changes when wireless
+  debugging restarts). Another computer pairs once (`adb pair`, the code
+  the phone shows) before connecting.
 - Backup and restore of the layout: pins, hidden apps, hidden space,
   folders, settings, as one JSON file, with `scripts/launcher.ts backup|
   restore` over adb (validated before writing), as ccez-keys' keyboard
@@ -151,6 +169,15 @@ isn't installed there.
 - Anything that needs Google Play services.
 
 ## Status
+
+2026-11-12: agent commands for the layout (see "Run by agents"): apps,
+pins, pin/unpin/move, hide/unhide/hidden, folders, gate, open, home,
+drawer, shortcuts, pin-shortcut; `LAUNCHER_SERIAL` takes host:port for
+wireless debugging over the tailnet. Unit tests for matching and every
+layout change (LayoutOpsTest), instrumented tests through Control
+(AgentCommandsTest). `open`, `home` and `drawer` start activities from the
+provider; that works on launcher_avd (API 36, the home role held) with
+another app in front — the S24 isn't checked.
 
 2026-11-12, branch `look` (not merged, waiting on the owner's yes): one
 refined look. One grid (20 dp margins; dock and drawer icons land on
