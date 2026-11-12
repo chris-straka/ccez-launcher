@@ -3,7 +3,8 @@ package uk.ccez.launcher
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,6 +35,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -48,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
@@ -77,6 +81,52 @@ fun pinDrop(store: LayoutStore, from: Int, to: Int) {
                 val at = minOf(from, to)
                 for (i in listOf(from, to).sortedDescending()) d.pins.removeAt(i)
                 d.pins.add(at.coerceIn(0, d.pins.size), Pin.FolderRef(id))
+            }
+        }
+    }
+}
+
+/**
+ * Swipe up anywhere on home opens the drawer, swipe down pulls the shade:
+ * over the pins, the strips and the Ask field too. Watched on the way in
+ * (Initial pass), so a vertical swipe is taken from whatever is under the
+ * finger before its tap or hold fires. A hold that reaches the long-press
+ * time first stays the child's (a pin's lift and drag, the home menu).
+ */
+fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointerInput(Unit) {
+    val distance = 70f
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        val holdMs = viewConfiguration.longPressTimeoutMillis
+        val slop = viewConfiguration.touchSlop
+        var taken = false
+        var dy = 0f
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            val moved = change.position - down.position
+            if (change.changedToUpIgnoreConsumed()) {
+                if (taken) {
+                    change.consume()
+                    dy = moved.y
+                }
+                break
+            }
+            if (taken) {
+                change.consume()
+                continue
+            }
+            if (change.isConsumed) break
+            if (change.uptimeMillis - down.uptimeMillis >= holdMs) break
+            if (abs(moved.y) > slop && abs(moved.y) > 2 * abs(moved.x)) {
+                taken = true
+                change.consume()
+            }
+        }
+        if (taken) {
+            when {
+                dy < -distance -> onUp()
+                dy > distance -> onDown()
             }
         }
     }
@@ -155,9 +205,11 @@ fun pinDrop(store: LayoutStore, from: Int, to: Int) {
     val showClock = remember(settingsTick) { app.settings.bool("home.clock") }
     val isHome = remember(settingsTick) { app.apps.isDefaultHome() }
     var folderOpen by remember { mutableStateOf<Folder?>(null) }
-    var dragTotal by remember { mutableStateOf(0f) }
 
-    Column(Modifier.fillMaxSize().background(Palette.bg).testTag("home")) {
+    Column(
+        Modifier.fillMaxSize().background(Palette.bg).testTag("home")
+            .homeSwipes(onUp = onOpenDrawer, onDown = onShade),
+    ) {
         if (showClock) ClockText()
         if (!isHome) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -174,22 +226,6 @@ fun pinDrop(store: LayoutStore, from: Int, to: Int) {
                     detectTapGestures(
                         onDoubleTap = { onDoubleTap() },
                         onLongPress = { onOpenSettings() },
-                    )
-                }
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragStart = { dragTotal = 0f },
-                        onVerticalDrag = { change, amount ->
-                            change.consume()
-                            dragTotal += amount
-                        },
-                        onDragEnd = {
-                            when {
-                                dragTotal < -70f -> onOpenDrawer()
-                                dragTotal > 70f -> onShade()
-                            }
-                            dragTotal = 0f
-                        },
                     )
                 },
         ) {
