@@ -94,14 +94,22 @@ languages (ICU spellout is not in the public SDK and reflection to it
 is blocked — checked on the emulator); other languages keep digits,
 their weekday and month still localized.
 
-## Stage 6: strips and widgets
+## Stage 6: strips and widgets — shipped, two numbers blocked on ccez-tube
 
-- Continue strips: the last ccez-tube video at its place (deep link), a
-  ccez-llm ask field (deep link with the text).
-- Today: words reviewed, minutes listened (from ccez-tube), quiet numbers.
-- The latest copy (clipboard, readable while home is focused) translated,
-  one tap to save it as a learning word.
-- Widget hosting for the few widgets the owner keeps.
+Shipped 2026-11-11: a Today strip (words reviewed here today), the
+latest copy read while home is focused (dictionary meaning, one tap to
+save as Learning, dismiss per copy), an Ask field through ccez-llm's
+`ccez-llm://send?text=` deep link, and widget hosting (pick in Settings
+or another app's pin request, configure when asked, hold to remove;
+restores rebind by provider). Blocked, written here plainly: ccez-tube
+exposes no cross-app state (no control provider, no custom scheme —
+checked in `~/SWE/ccez-tube` 2026-11-11), so "the last video at its
+place" ships as a Continue strip that opens ccez-tube (which resumes
+itself), and "minutes listened" is not shown. Both need a small
+read-only surface in ccez-tube (a `content call` like this app's
+Control) — outside this repo. The Ask deep link is verified only to
+the point of a clean "not installed" log on the emulator; ccez-llm
+isn't installed there.
 
 ## Built in from the start (future-proofing, owner agreed 2026-11-11)
 
@@ -154,8 +162,8 @@ numbers only): Macrobenchmark cold median 471 ms (min 388),
 return-to-home median 180 ms (min 109); `am start -W` best 256 ms /
 61 ms on a quiet run. Baseline in `perf-baseline.json` (700 / 150 ms,
 gate at +25% in `scripts/perf.sh`); replace with S24 numbers on the
-owner's install. Gates run 2026-11-11: unit tests, 10 instrumented
-tests, screenshots in `screenshots/`, perf — all green on launcher_avd.
+owner's install. Gates run per stage on launcher_avd (`scripts/check.sh`):
+unit tests, instrumented tests, screenshots in `screenshots/`, perf.
 Notes: the overlay truce is launcher-side only (it broadcasts
 `HOME_VISIBLE` to uk.ccez.keys and reports `home_visible` in status);
 the keys overlay still needs its own front-app check for
@@ -164,8 +172,14 @@ are coded but untested here (this emulator has neither). The S24
 One UI/Recents check and the "delete the word widget" call wait on the
 owner's install.
 
-Stage 2 shipped 2026-11-11: home words with meanings and grades through
-the core (see above). Stage 3 shipped the same day: word cards in
-search. Stage 4 shipped the same day: word gates before chosen apps
-(verified with YouTube on the emulator). Stage 5 shipped the same
-day: language-of-the-day names and clock. Next: Stage 6.
+Stages 2–6 shipped the same day (see each above), a tagged release
+each. Gates: unit tests, 18 instrumented tests, screenshots, perf —
+run per stage on launcher_avd. What remains is all owner-side or
+another repo's: install a release on the S24 and fill in the One UI
+gesture/Recents findings and real perf numbers; check the second
+profile and Private space on that phone; the keys overlay's front-app
+check (in ccez-keys); a read-only state surface in ccez-tube for the
+last video's title and minutes listened; and hearing the clock speak
+(TTS is never started in emulator tests). The signing key lives in
+`~/.config/ccez-launcher/` (made once by `scripts/build.sh`) — back it
+up; a new key means uninstalling the launcher and its layout.
