@@ -23,6 +23,13 @@ n = int(re.findall(r'<div class="counter">(\d+)</div>', s)[0])
 print(f"instrumented tests ran: {n}")
 sys.exit(0 if n > 0 else 1)
 PYEOF
+# The connected tests uninstall the app when they end, and home falls back
+# to the emulator's own launcher: screenshots of that passed as ours
+# (2026-11-11). Back in, as home, and checked, before any shot.
+adb -s "$SERIAL" install app/build/outputs/apk/debug/app-debug.apk >/dev/null
+adb -s "$SERIAL" shell cmd role add-role-holder android.app.role.HOME uk.ccez.launcher >/dev/null 2>&1 || true
+adb -s "$SERIAL" shell pm grant uk.ccez.launcher android.permission.READ_CONTACTS >/dev/null 2>&1 || true
+adb -s "$SERIAL" shell cmd role get-role-holders android.app.role.HOME | grep -qx uk.ccez.launcher || { echo "ccez-launcher isn't home: no shots"; exit 1; }
 LAUNCHER_SERIAL="$SERIAL" scripts/shots.sh
 NO_INSTALL=1 scripts/build.sh >/dev/null
 adb -s "$SERIAL" shell cmd role remove-role-holder android.app.role.HOME uk.ccez.launcher >/dev/null 2>&1 || true

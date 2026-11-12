@@ -155,18 +155,21 @@ class LayoutStore(dir: File, private val log: LauncherLog) {
 
     /** Every change goes through here: mutate a copy's lists, save, publish. */
     @Synchronized fun update(block: (LayoutData) -> Unit) {
-        val d = data.value
+        // A copy changed, never the one on screen: changed in place, the old
+        // value already held the change, Compose's remember keys saw no
+        // difference and the open drawer kept a hidden app (2026-11-11).
+        val old = data.value
+        val d = LayoutData(
+            old.pins.toMutableList(),
+            old.folders.mapValues { (_, f) -> Folder(f.id, f.name, f.items.toMutableList()) }.toMutableMap(),
+            old.hidden.toMutableSet(),
+            old.gates.toMutableSet(),
+            old.nextFolder,
+            old.widgets.toMutableList(),
+        )
         block(d)
         writeSafely(file, d.toJson())
-        // Same object, new tick: StateFlow only emits on change, so copy.
-        data.value = LayoutData(
-            d.pins.toMutableList(),
-            d.folders.mapValues { (_, f) -> Folder(f.id, f.name, f.items.toMutableList()) }.toMutableMap(),
-            d.hidden.toMutableSet(),
-            d.gates.toMutableSet(),
-            d.nextFolder,
-            d.widgets.toMutableList(),
-        )
+        data.value = d
     }
 
     @Synchronized fun replace(d: LayoutData) {

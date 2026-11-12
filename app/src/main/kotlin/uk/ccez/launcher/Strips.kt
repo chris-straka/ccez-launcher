@@ -74,11 +74,8 @@ import uk.ccez.keys.core.WordStatus
         onDispose { owner.lifecycle.removeObserver(obs) }
     }
     var dismissed by remember { mutableStateOf("") }
-    val clip by produceState<String>("", tick) {
-        value = runCatching {
-            val cm = ctx.getSystemService(ClipboardManager::class.java)
-            cm?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString().orEmpty()
-        }.getOrDefault("")
+    val clip by produceState(LastCopy.text, tick) {
+        value = runCatching { LastCopy.read(ctx) }.getOrDefault("")
     }
     val text = clip.trim()
     if (text.isEmpty() || text.length > 48 || '\n' in text || text == dismissed) return
@@ -187,4 +184,30 @@ import uk.ccez.keys.core.WordStatus
             cursorColor = Palette.accent,
         ),
     )
+}
+
+/**
+ * The latest copy, read only when something new was copied: Android says
+ * "ccez-launcher pasted from your clipboard" on every read, and home came
+ * back many times a minute (2026-11-11). The clip's description (its time,
+ * its kind) is read freely; the text only once per copy, and never what
+ * isn't text.
+ */
+private object LastCopy {
+    var text = ""
+    private var seen = -1L
+
+    fun read(ctx: android.content.Context): String {
+        val cm = ctx.getSystemService(ClipboardManager::class.java) ?: return ""
+        val desc = cm.primaryClipDescription ?: return "".also { text = ""; seen = -1L }
+        val at = desc.timestamp
+        if (at == seen) return text
+        seen = at
+        text = if (desc.hasMimeType("text/*")) {
+            cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString().orEmpty()
+        } else {
+            ""
+        }
+        return text
+    }
 }

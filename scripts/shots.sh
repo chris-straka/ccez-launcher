@@ -6,6 +6,8 @@ set -euo pipefail
 SERIAL="${LAUNCHER_SERIAL:?set LAUNCHER_SERIAL}"
 OUT="${1:-$HOME/SWE/.muse-runs/launcher-shots}"
 mkdir -p "$OUT"
+# Only ever of ccez-launcher: another home app answers HOME otherwise.
+adb -s "$SERIAL" shell cmd role get-role-holders android.app.role.HOME | grep -qx uk.ccez.launcher || { echo "ccez-launcher isn't the home app on $SERIAL"; exit 1; }
 shot() { adb -s "$SERIAL" exec-out screencap -p > "$OUT/$1.png"; echo "$1"; }
 home() { adb -s "$SERIAL" shell input keyevent KEYCODE_HOME; sleep 1; }
 home; shot home
