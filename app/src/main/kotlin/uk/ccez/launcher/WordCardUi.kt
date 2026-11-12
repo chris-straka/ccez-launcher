@@ -2,11 +2,16 @@ package uk.ccez.launcher
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,7 +25,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -66,19 +70,25 @@ data class WordHit(val lang: String, val typed: String, val card: Card)
     return hit
 }
 
+/** Learning / Known: an outlined pill, filled softly when it holds. */
 @Composable private fun StatusChip(text: String, on: Boolean, tag: String, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
     Box(
-        Modifier.clip(RoundedCornerShape(8.dp))
-            .background(if (on) Palette.accent else Palette.cell)
+        Modifier.clip(shape)
+            .then(if (on) Modifier.background(Palette.accent.copy(alpha = 0.16f)) else Modifier.border(1.dp, Palette.line, shape))
             .clickable(onClick = onClick)
+            .semantics { selected = on }
+            .heightIn(min = 36.dp)
             .padding(horizontal = 14.dp, vertical = 8.dp)
             .testTag(tag),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(text, color = if (on) Color.Black else Palette.fg, fontSize = 14.sp)
+        Text(text, color = if (on) Palette.accent else Palette.dim, fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
 }
 
 /** The word card in search, as the keyboard's card: Learning and Known toggle. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable fun WordCardRow(hit: WordHit) {
     val app = App.instance
     val ctx = LocalContext.current
@@ -94,62 +104,73 @@ data class WordHit(val lang: String, val typed: String, val card: Card)
     }
 
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(14.dp)).background(Color(0xFF141414))
-            .padding(horizontal = 14.dp, vertical = 12.dp)
+        Modifier.fillMaxWidth().padding(horizontal = Look.margin, vertical = 6.dp)
+            .clip(RoundedCornerShape(Look.radius + 4.dp)).background(Palette.cell)
+            .padding(start = Look.inset + 2.dp, end = Look.inset, top = 16.dp, bottom = 14.dp)
             .semantics {
                 contentDescription = "$head, ${card.meanings.firstOrNull().orEmpty()}"
             }
             .testTag("word-card"),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        // The reading over the word, the parts of speech level with it on the right.
+        if (card.reading.isNotEmpty() && card.reading != head) {
+            Text(card.reading, color = Palette.dim, fontSize = Look.smallSize, lineHeight = 16.sp)
+        }
         Row(verticalAlignment = Alignment.Bottom) {
-            Column {
-                if (card.reading.isNotEmpty() && card.reading != head) {
-                    Text(card.reading, color = Palette.dim, fontSize = 12.sp)
-                }
-                Row(verticalAlignment = Alignment.Bottom) {
-                    if (card.article.isNotEmpty()) {
-                        Text(
-                            if (card.article.endsWith("'")) card.article else "${card.article} ",
-                            color = Palette.dim, fontSize = 19.sp,
-                            modifier = Modifier.alignByBaseline(),
-                        )
-                    }
+            Row(Modifier.weight(1f).alignByBaseline(), verticalAlignment = Alignment.Bottom) {
+                if (card.article.isNotEmpty()) {
                     Text(
-                        head, color = Palette.fg, fontSize = 24.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        if (card.article.endsWith("'")) card.article else "${card.article} ",
+                        color = Palette.dim, fontSize = 22.sp, fontWeight = FontWeight.Light,
                         modifier = Modifier.alignByBaseline(),
                     )
-                    if (card.gender.isNotEmpty() && card.article.isEmpty()) {
-                        Text(card.gender, color = Palette.dim, fontSize = 12.sp, modifier = Modifier.padding(start = 6.dp))
-                    }
                 }
-                if (hit.typed != head && hit.typed != card.word) {
-                    Text(hit.typed, color = Palette.faint, fontSize = 13.sp)
-                } else if (card.word != head) {
-                    Text(card.word, color = Palette.faint, fontSize = 13.sp)
-                }
-            }
-            Spacer(Modifier.weight(1f))
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                for (p in card.pos.take(2)) {
+                Text(
+                    head, color = Palette.fg, fontSize = 30.sp, lineHeight = 36.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.alignByBaseline(),
+                )
+                if (card.gender.isNotEmpty() && card.article.isEmpty()) {
                     Text(
-                        p, color = Palette.dim, fontSize = 10.sp,
-                        modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(Palette.cell)
-                            .padding(horizontal = 5.dp, vertical = 1.dp),
+                        card.gender, color = Palette.dim, fontSize = Look.smallSize,
+                        modifier = Modifier.alignByBaseline().padding(start = 8.dp),
                     )
                 }
             }
+            run {
+                Text(
+                    (card.pos.take(2) + hit.lang).joinToString(" · "),
+                    color = Palette.faint, fontSize = 12.sp, letterSpacing = 0.3.sp,
+                    maxLines = 1,
+                    modifier = Modifier.alignByBaseline().padding(start = 12.dp),
+                )
+            }
         }
+        val form = when {
+            hit.typed != head && hit.typed != card.word -> hit.typed
+            card.word != head -> card.word
+            else -> null
+        }
+        if (form != null) Text(form, color = Palette.faint, fontSize = Look.smallSize, lineHeight = 18.sp)
         card.meanings.firstOrNull()?.let {
-            Text(it, color = Palette.fg, fontSize = 16.sp, lineHeight = 20.sp, maxLines = 3)
+            Text(
+                it, color = Palette.fg, fontSize = 17.sp, lineHeight = 24.sp, maxLines = 3,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp),
+            )
         }
         val rest = card.meanings.drop(1)
         if (more && rest.isNotEmpty()) {
-            Text(rest.joinToString("; "), color = Palette.dim, fontSize = 14.sp, lineHeight = 18.sp, maxLines = 6)
+            Text(
+                rest.joinToString("; "), color = Palette.dim, fontSize = 15.sp, lineHeight = 21.sp, maxLines = 6,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp),
+            )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        FlowRow(
+            Modifier.padding(top = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             StatusChip("Learning", status == WordStatus.LEARNING, "word-learning") {
                 setStatus(if (status == WordStatus.LEARNING) WordStatus.NEW else WordStatus.LEARNING)
             }
@@ -159,12 +180,11 @@ data class WordHit(val lang: String, val typed: String, val card: Card)
             if (rest.isNotEmpty()) {
                 Text(
                     if (more) "Less" else "More",
-                    color = Palette.accent, fontSize = 14.sp,
-                    modifier = Modifier.clickable { more = !more }.padding(6.dp).testTag("word-more"),
+                    color = Palette.dim, fontSize = 14.sp,
+                    modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable { more = !more }
+                        .padding(horizontal = 10.dp, vertical = 8.dp).testTag("word-more"),
                 )
             }
-            Spacer(Modifier.weight(1f))
-            Text(hit.lang, color = Palette.faint, fontSize = 12.sp)
         }
     }
 }

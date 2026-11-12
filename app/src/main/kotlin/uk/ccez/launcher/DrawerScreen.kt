@@ -8,6 +8,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.border
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -24,10 +33,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -76,13 +81,49 @@ import androidx.fragment.app.FragmentActivity
     }
 }
 
+/** A search result that isn't an app: the answer, and its kind quietly on the right. */
 @Composable private fun ResultRow(title: String, sub: String, tag: String, onClick: () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp).testTag(tag),
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable(onClick = onClick)
+            .padding(horizontal = Look.margin + Look.inset, vertical = 10.dp).testTag(tag),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(title, color = Palette.fg, fontSize = 16.sp)
-        if (sub.isNotBlank()) Text(sub, color = Palette.dim, fontSize = 13.sp)
+        Text(
+            title, color = Palette.fg, fontSize = Look.bodySize,
+            maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        )
+        if (sub.isNotBlank()) Text(sub, color = Palette.faint, fontSize = Look.smallSize, maxLines = 1)
+    }
+}
+
+/** A sum or a conversion: the answer large, what was asked under it. */
+@Composable private fun AnswerRow(answer: String, asked: String, tag: String, onClick: () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().clickable(onClick = onClick)
+            .padding(horizontal = Look.margin + Look.inset, vertical = 12.dp).testTag(tag),
+    ) {
+        Text(answer, color = Palette.fg, fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.Light)
+        if (asked.isNotBlank()) Text(asked, color = Palette.faint, fontSize = Look.smallSize)
+    }
+}
+
+/** An app found by search: its icon on the field's text line, then its name. */
+@Composable private fun AppResultRow(entry: AppEntry, name: String, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick)
+            .padding(horizontal = Look.margin + Look.inset, vertical = 8.dp)
+            .semantics(mergeDescendants = true) {}
+            .testTag("result-app"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        AppIconImage(entry, Modifier.size(36.dp))
+        Text(
+            name, color = Palette.fg, fontSize = Look.bodySize,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        )
+        if (entry.otherProfile) Text("Work", color = Palette.faint, fontSize = Look.smallSize)
     }
 }
 
@@ -134,12 +175,12 @@ import androidx.fragment.app.FragmentActivity
 
     val clipboard = LocalClipboardManager.current
     Column(Modifier.fillMaxSize().testTag("drawer")) {
-        OutlinedTextField(
+        PillField(
             value = query,
             onValueChange = { query = it },
-            modifier = Modifier.fillMaxWidth().padding(12.dp).testTag("search"),
-            singleLine = true,
-            placeholder = { Text("Search", color = Palette.faint) },
+            placeholder = "Search",
+            modifier = Modifier.padding(start = Look.margin, end = Look.margin, top = 12.dp, bottom = 8.dp)
+                .testTag("search"),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = {
                 appHits.firstOrNull()?.let { first ->
@@ -147,37 +188,25 @@ import androidx.fragment.app.FragmentActivity
                     onClose()
                 }
             }),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = Palette.fg,
-                unfocusedTextColor = Palette.fg,
-                focusedBorderColor = Palette.dim,
-                unfocusedBorderColor = Palette.line,
-                cursorColor = Palette.accent,
-            ),
         )
         if (query.isBlank()) {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(76.dp),
-                modifier = Modifier.fillMaxSize().testTag("drawer-grid"),
-                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                items(visible, key = { it.key }) { e ->
-                    Box(contentAlignment = Alignment.Center) {
-                        AppCell(
-                            e,
-                            onClick = { onLaunch(e); onClose() },
-                            onLongClick = { onMenu(MenuTarget.DrawerApp(e)) },
-                            labelOverride = shownNames[e.key],
-                        )
-                    }
-                }
+            AppGrid(visible, Modifier.fillMaxSize().testTag("drawer-grid")) { e, w ->
+                AppCell(
+                    e,
+                    onClick = { onLaunch(e); onClose() },
+                    onLongClick = { onMenu(MenuTarget.DrawerApp(e)) },
+                    labelOverride = shownNames[e.key],
+                    width = w,
+                )
             }
         } else {
-            LazyColumn(Modifier.fillMaxSize().testTag("search-results")) {
+            LazyColumn(
+                Modifier.fillMaxSize().testTag("search-results"),
+                contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp),
+            ) {
                 if (calc != null) {
                     item {
-                        ResultRow(calc, query.trim(), "result-calc") {
+                        AnswerRow(calc, query.trim(), "result-calc") {
                             clipboard.setText(AnnotatedString(calc))
                             Toast.makeText(ctx, "Copied", Toast.LENGTH_SHORT).show()
                             app.launcherLog.log("info", "search-calc")
@@ -186,7 +215,7 @@ import androidx.fragment.app.FragmentActivity
                 }
                 if (unit != null) {
                     item {
-                        ResultRow(unit.text, "", "result-unit") {
+                        AnswerRow(unit.text, "", "result-unit") {
                             clipboard.setText(AnnotatedString(unit.value + " " + unit.unit))
                             Toast.makeText(ctx, "Copied", Toast.LENGTH_SHORT).show()
                             app.launcherLog.log("info", "search-unit")
@@ -194,7 +223,7 @@ import androidx.fragment.app.FragmentActivity
                     }
                 }
                 items(appHits, key = { it.key }) { e ->
-                    ResultRow(shownNames[e.key] ?: e.label, if (e.otherProfile) "Work" else "", "result-app") {
+                    AppResultRow(e, shownNames[e.key] ?: e.label) {
                         onLaunch(e)
                         onClose()
                     }
@@ -262,62 +291,90 @@ import androidx.fragment.app.FragmentActivity
         prompt.authenticate(info)
     }
 
-    Column(Modifier.fillMaxSize().padding(top = 18.dp).testTag("hidden")) {
-        Text("Hidden", color = Palette.fg, fontSize = 20.sp, modifier = Modifier.padding(horizontal = 16.dp))
+    Column(Modifier.fillMaxSize().testTag("hidden")) {
+        // Where search sits in the drawer, the space's name: same height, same line.
+        Box(
+            Modifier.fillMaxWidth().padding(start = Look.margin, end = Look.margin, top = 12.dp, bottom = 8.dp)
+                .heightIn(min = Look.field),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Text(
+                "Hidden", color = Palette.dim, fontSize = Look.bodySize, fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(start = Look.inset).semantics { heading() },
+            )
+        }
         if (locked) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Button(
-                    onClick = { askFingerprint() },
-                    modifier = Modifier.testTag("hidden-unlock"),
-                    colors = ButtonDefaults.buttonColors(containerColor = Palette.cell, contentColor = Palette.fg),
-                ) { Text("Unlock") }
+                QuietButton("Unlock", Modifier.testTag("hidden-unlock")) { askFingerprint() }
             }
             return@Column
         }
         val hiddenApps = apps.filter { it.key in layout.hidden }
         val privateUser = app.apps.privateUser
         val privateApps = if (privateUser != null) apps.filter { it.user == privateUser } else emptyList()
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(76.dp),
-            modifier = Modifier.fillMaxWidth().weight(1f).testTag("hidden-grid"),
-            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            items(hiddenApps, key = { it.key }) { e ->
-                Box(contentAlignment = Alignment.Center) {
-                    AppCell(
-                        e,
-                        onClick = { onLaunch(e) },
-                        onLongClick = { onMenu(MenuTarget.HiddenApp(e)) },
-                    )
-                }
-            }
-            items(privateApps, key = { it.key }) { e ->
-                Box(contentAlignment = Alignment.Center) {
-                    AppCell(
-                        e,
-                        onClick = { onLaunch(e) },
-                        onLongClick = { onMenu(MenuTarget.HiddenApp(e)) },
-                    )
-                }
-            }
+        AppGrid(hiddenApps + privateApps, Modifier.fillMaxWidth().weight(1f).testTag("hidden-grid")) { e, w ->
+            AppCell(
+                e,
+                onClick = { onLaunch(e) },
+                onLongClick = { onMenu(MenuTarget.HiddenApp(e)) },
+                width = w,
+            )
         }
         if (privateUser != null && app.apps.isQuiet(privateUser)) {
-            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Hairline(Modifier.padding(horizontal = Look.margin))
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = Look.margin + Look.inset, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text("Private space", color = Palette.dim, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                Button(
-                    onClick = { app.apps.requestProfileUnlock(privateUser) },
-                    modifier = Modifier.testTag("private-unlock"),
-                    colors = ButtonDefaults.buttonColors(containerColor = Palette.cell, contentColor = Palette.fg),
-                ) { Text("Unlock") }
+                QuietButton("Unlock", Modifier.testTag("private-unlock")) { app.apps.requestProfileUnlock(privateUser) }
             }
         } else if (privateUser != null) {
             Text(
                 "Private space",
                 color = Palette.faint,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                fontSize = Look.smallSize,
+                modifier = Modifier.padding(horizontal = Look.margin + Look.inset, vertical = 12.dp),
             )
         }
+    }
+}
+
+/**
+ * Apps in even columns whose first and last icons sit on the margins, as
+ * the dock's do; rows a steady 8 dp apart.
+ */
+@Composable fun AppGrid(
+    apps: List<AppEntry>,
+    modifier: Modifier = Modifier,
+    cell: @Composable (AppEntry, Dp) -> Unit,
+) {
+    BoxWithConstraints(modifier) {
+        val columns = Look.drawerColumns(maxWidth)
+        val side = Look.gridPad(maxWidth, columns)
+        val cellW = (maxWidth - side * 2) / columns
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = side, end = side, top = 0.dp, bottom = 16.dp),
+        ) {
+            items(apps, key = { it.key }) { e ->
+                Box(contentAlignment = Alignment.Center) { cell(e, cellW) }
+            }
+        }
+    }
+}
+
+/** The few buttons here: a quiet outlined pill. */
+@Composable fun QuietButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier.clip(RoundedCornerShape(Look.radius))
+            .border(1.dp, Palette.line, RoundedCornerShape(Look.radius))
+            .clickable(onClick = onClick)
+            .heightIn(min = 44.dp)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, color = Palette.fg, fontSize = 15.sp)
     }
 }
