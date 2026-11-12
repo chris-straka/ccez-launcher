@@ -13,11 +13,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -52,13 +52,11 @@ import uk.ccez.keys.core.WordStatus
 @Composable fun TodayStrip() {
     val reviewed by Today.reviewed.collectAsState()
     if (reviewed <= 0) return
-    Box(Modifier.fillMaxWidth().testTag("today"), contentAlignment = Alignment.Center) {
-        Text(
-            if (reviewed == 1) "1 word today" else "$reviewed words today",
-            color = Palette.faint, fontSize = 13.sp,
-            modifier = Modifier.padding(vertical = 2.dp),
-        )
-    }
+    Text(
+        if (reviewed == 1) "1 word today" else "$reviewed words today",
+        color = Palette.faint, fontSize = Look.smallSize,
+        modifier = Modifier.padding(horizontal = Look.margin, vertical = 4.dp).testTag("today"),
+    )
 }
 
 @Composable fun ClipStrip() {
@@ -99,17 +97,20 @@ import uk.ccez.keys.core.WordStatus
     val head = word.card.lemma.ifEmpty { word.card.word }
     var saved by remember(text) { mutableStateOf(word.card.status == WordStatus.LEARNING) }
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp)).background(Palette.cell)
-            .padding(horizontal = 12.dp, vertical = 9.dp)
+        Modifier.fillMaxWidth().padding(horizontal = Look.margin, vertical = 4.dp)
+            .clip(RoundedCornerShape(Look.radius)).background(Palette.cell)
+            .padding(start = Look.inset, end = 8.dp, top = 10.dp, bottom = 10.dp)
             .testTag("clip-strip"),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            Text(head, color = Palette.fg, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                head, color = Palette.fg, fontSize = Look.bodySize, fontWeight = FontWeight.Medium,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
             word.card.meanings.firstOrNull()?.let {
-                Text(it, color = Palette.dim, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(it, color = Palette.dim, fontSize = Look.smallSize, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         Text(
@@ -125,8 +126,8 @@ import uk.ccez.keys.core.WordStatus
             }.padding(6.dp).testTag("clip-save"),
         )
         Text(
-            "×", color = Palette.dim, fontSize = 16.sp,
-            modifier = Modifier.clickable { dismissed = text }.padding(6.dp),
+            "×", color = Palette.faint, fontSize = 18.sp,
+            modifier = Modifier.clickable { dismissed = text }.padding(horizontal = 8.dp, vertical = 4.dp),
         )
     }
 }
@@ -137,18 +138,21 @@ import uk.ccez.keys.core.WordStatus
     val apps by app.apps.apps.collectAsState()
     val tube = apps.firstOrNull { it.id.pkg == "uk.ccez.tube" && !it.otherProfile } ?: return
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp)
-            .clip(RoundedCornerShape(12.dp)).background(Palette.cell)
+        Modifier.fillMaxWidth().padding(horizontal = Look.margin, vertical = 4.dp)
+            .clip(RoundedCornerShape(Look.radius)).background(Palette.cell)
             .clickable { onLaunch(tube) }
-            .padding(horizontal = 12.dp, vertical = 9.dp)
+            .heightIn(min = Look.field)
+            .padding(horizontal = Look.inset, vertical = 10.dp)
             .testTag("tube-strip"),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        AppIconImage(tube, Modifier.size(28.dp))
-        Text(AppNames.nameFor(tube), color = Palette.fg, fontSize = 15.sp, maxLines = 1)
-        Spacer(Modifier.weight(1f))
-        Text("Continue", color = Palette.dim, fontSize = 13.sp)
+        AppIconImage(tube, Modifier.size(26.dp))
+        Text(
+            AppNames.nameFor(tube), color = Palette.fg, fontSize = 15.sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        )
+        Text("Continue", color = Palette.dim, fontSize = Look.smallSize)
     }
 }
 
@@ -157,12 +161,11 @@ import uk.ccez.keys.core.WordStatus
     val app = App.instance
     val ctx = LocalContext.current
     var text by remember { mutableStateOf("") }
-    OutlinedTextField(
+    PillField(
         value = text,
         onValueChange = { text = it },
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp).testTag("llm-ask"),
-        singleLine = true,
-        placeholder = { Text("Ask", color = Palette.faint) },
+        placeholder = "Ask",
+        modifier = Modifier.padding(horizontal = Look.margin, vertical = 4.dp).testTag("llm-ask"),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
         keyboardActions = KeyboardActions(onSend = {
             val q = text.trim()
@@ -176,13 +179,6 @@ import uk.ccez.keys.core.WordStatus
                 text = ""
             }
         }),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = Palette.fg,
-            unfocusedTextColor = Palette.fg,
-            focusedBorderColor = Palette.dim,
-            unfocusedBorderColor = Palette.line,
-            cursorColor = Palette.accent,
-        ),
     )
 }
 

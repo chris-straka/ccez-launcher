@@ -16,6 +16,10 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -57,6 +61,15 @@ import kotlinx.coroutines.delay
 
 /** Columns that fit the width: phones get 5, wide screens more. */
 fun columnsFor(widthDp: Int): Int = (widthDp / 76).coerceIn(4, 8)
+
+/**
+ * The dock keeps one row when one more column still leaves 64 dp a cell:
+ * six pins on a phone sit in a row, not five and one alone.
+ */
+fun dockColumns(widthDp: Int, pins: Int): Int {
+    val base = columnsFor(widthDp)
+    return if (pins == base + 1 && widthDp / pins >= 64) pins else base
+}
 
 /** A long-press lift dropped on a cell: folder, join, or reorder. */
 fun pinDrop(store: LayoutStore, from: Int, to: Int) {
@@ -169,8 +182,12 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
             now.format(DateTimeFormatter.ofPattern("EEEE d MMMM", java.util.Locale.ENGLISH))
         }
     }
+    // Big, thin, on the left margin. Its scale follows the font size only so
+    // far: past 1.3x it would wrap a four-digit time.
+    val fontScale = LocalDensity.current.fontScale
+    val cap = if (fontScale > 1.3f) 1.3f / fontScale else 1f
     Column(
-        Modifier.fillMaxWidth().padding(top = 28.dp, bottom = 4.dp, start = 16.dp, end = 16.dp)
+        Modifier.fillMaxWidth().padding(top = 40.dp, start = Look.margin, end = Look.margin)
             .pointerInput(spoken) {
                 detectTapGestures(onTap = {
                     if (spoken != null) Speaker.say(ctx, "$time. $date", spoken)
@@ -178,15 +195,21 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
             }
             .semantics { contentDescription = "$time, $date" }
             .testTag("clock"),
-        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
             time, color = Palette.fg,
-            fontSize = if (spoken != null) 30.sp else 56.sp,
-            lineHeight = if (spoken != null) 36.sp else 58.sp,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            fontSize = (if (spoken != null) 34f else 76f).sp * cap,
+            lineHeight = (if (spoken != null) 40f else 80f).sp * cap,
+            fontWeight = if (spoken != null) FontWeight.Light else FontWeight.Thin,
+            letterSpacing = if (spoken != null) 0.sp else (-1.5).sp,
+            // Thin numerals carry a little side bearing: pulled onto the margin.
+            modifier = Modifier.offset(x = if (spoken != null) 0.dp else (-3).dp),
         )
-        Text(date, color = Palette.dim, fontSize = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text(
+            date, color = Palette.dim, fontSize = 15.sp, lineHeight = 20.sp,
+            letterSpacing = 0.2.sp,
+            modifier = Modifier.padding(top = 2.dp),
+        )
     }
 }
 
@@ -212,10 +235,11 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
     ) {
         if (showClock) ClockText()
         if (!isHome) {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                TextButton(onClick = onSetHome, modifier = Modifier.testTag("set-home")) {
-                    Text("Set as home", color = Palette.accent, fontSize = 15.sp)
-                }
+            TextButton(
+                onClick = onSetHome,
+                modifier = Modifier.padding(start = Look.margin - 12.dp, top = 4.dp).testTag("set-home"),
+            ) {
+                Text("Set as home", color = Palette.accent, fontSize = 15.sp)
             }
         }
         TodayStrip()
@@ -235,6 +259,7 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
         WidgetStrip()
         TubeStrip(onLaunch = onLaunch)
         LlmAskStrip()
+        Spacer(Modifier.height(4.dp))
         PinnedGrid(
             pins = layout.pins,
             folders = layout.folders,
@@ -262,69 +287,56 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
     onMenu: (MenuTarget) -> Unit,
 ) {
     val app = App.instance
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = Color(0xFF101010),
-        title = { Text(folder.name.ifBlank { "Folder" }, color = Palette.fg, fontSize = 17.sp) },
+    MenuSurface(
+        onDismiss = onDismiss,
+        title = folder.name.ifBlank { "Folder" },
         modifier = Modifier.testTag("folder"),
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                for (row in folder.items.chunked(4)) {
-                    Row {
-                        for (pin in row) {
-                            val index = folder.items.indexOf(pin)
-                            when (pin) {
-                                is Pin.App -> {
-                                    val e = app.apps.byId(pin.id)
-                                    if (e != null) {
-                                        AppCell(e, onClick = { onLaunch(e) }, onLongClick = {
-                                            onMenu(MenuTarget.FolderItem(folder.id, index, pin)); onDismiss()
-                                        })
-                                    }
-                                }
-                                is Pin.Shortcut -> {
-                                    ShortcutCell(pin, onClick = {
-                                        val user = app.apps.userForSerial(pin.user)
-                                        app.apps.startShortcut(pin.pkg, pin.shortcutId, user)
-                                        onDismiss()
-                                    }, onLongClick = {
+    ) {
+        Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+            for (row in folder.items.chunked(4)) {
+                Row {
+                    for (pin in row) {
+                        val index = folder.items.indexOf(pin)
+                        when (pin) {
+                            is Pin.App -> {
+                                val e = app.apps.byId(pin.id)
+                                if (e != null) {
+                                    AppCell(e, width = 76.dp, onClick = { onLaunch(e) }, onLongClick = {
                                         onMenu(MenuTarget.FolderItem(folder.id, index, pin)); onDismiss()
                                     })
                                 }
-                                is Pin.FolderRef -> Unit
                             }
+                            is Pin.Shortcut -> {
+                                ShortcutCell(pin, onClick = {
+                                    val user = app.apps.userForSerial(pin.user)
+                                    app.apps.startShortcut(pin.pkg, pin.shortcutId, user)
+                                    onDismiss()
+                                }, onLongClick = {
+                                    onMenu(MenuTarget.FolderItem(folder.id, index, pin)); onDismiss()
+                                })
+                            }
+                            is Pin.FolderRef -> Unit
                         }
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close", color = Palette.dim) }
-        },
-    )
+        }
+    }
 }
 
 @Composable fun ShortcutCell(pin: Pin.Shortcut, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
-    Column(
-        Modifier.width(76.dp).clip(RoundedCornerShape(12.dp))
+    Box(
+        Modifier.width(Look.cell).clip(RoundedCornerShape(16.dp))
             .pointerInput(pin) {
                 detectTapGestures(
                     onTap = { onClick() },
                     onLongPress = { onLongClick?.invoke() },
                 )
             }
-            .padding(top = 8.dp, bottom = 6.dp)
             .semantics { contentDescription = pin.label }
             .testTag("shortcut:${pin.pkg}/${pin.shortcutId}"),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        ShortcutIconImage(pin, Modifier.size(52.dp))
-        Text(
-            pin.label, color = Palette.fg, fontSize = 11.sp, lineHeight = 13.sp,
-            maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-            modifier = Modifier.width(72.dp),
-        )
+        IconLabel(pin.label, Look.cell) { ShortcutIconImage(pin, it) }
     }
 }
 
@@ -345,9 +357,11 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
     // Collected so the row appears as soon as the app list lands.
     val entries by app.apps.apps.collectAsState()
     val byId = remember(entries) { entries.associateBy { it.id } }
-    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 10.dp).testTag("pins")) {
-        val totalWidth = maxWidth
-        val columns = columnsFor(totalWidth.value.toInt())
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(bottom = 6.dp).testTag("pins")) {
+        val columns = dockColumns(maxWidth.value.toInt(), pins.size)
+        // The first and last icons sit on the margins, as the strips above do.
+        val side = Look.gridPad(maxWidth, columns)
+        val totalWidth = maxWidth - side * 2
         val positions = remember { mutableStateMapOf<Int, Rect>() }
         var containerTopLeft by remember { mutableStateOf(Offset.Zero) }
         var dragIndex by remember { mutableStateOf<Int?>(null) }
@@ -374,7 +388,7 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
             }
         }
 
-        Box(Modifier.onGloballyPositioned { containerTopLeft = it.boundsInRoot().topLeft }) {
+        Box(Modifier.padding(horizontal = side).onGloballyPositioned { containerTopLeft = it.boundsInRoot().topLeft }) {
             Column {
                 for (row in pins.withIndex().chunked(columns)) {
                     Row(Modifier.fillMaxWidth()) {
@@ -413,7 +427,7 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
                                     },
                                 contentAlignment = Alignment.Center,
                             ) {
-                                PinCell(pin, folders, byId)
+                                PinCell(pin, folders, byId, totalWidth / columns)
                             }
                         }
                     }
@@ -431,7 +445,7 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
                             )
                         }.alpha(0.9f),
                     ) {
-                        PinCell(pin, folders, byId)
+                        PinCell(pin, folders, byId, totalWidth / columns)
                     }
                 }
             }
@@ -444,6 +458,7 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
     pin: Pin,
     folders: Map<String, Folder>,
     byId: Map<AppId, AppEntry>,
+    width: Dp = Look.cell,
 ) {
     val shownNames by AppNames.shown.collectAsState()
     when (pin) {
@@ -452,76 +467,52 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
             if (e != null) {
                 val shown = shownNames[e.key] ?: e.label
                 // Shown only: the grid's own gestures handle tap and lift.
-                Column(
-                    Modifier.width(76.dp).padding(top = 8.dp, bottom = 6.dp)
-                        .semantics { contentDescription = e.label }
-                        .testTag("app:${e.key}"),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                Box(
+                    Modifier.semantics { contentDescription = e.label }.testTag("app:${e.key}"),
                 ) {
-                    AppIconImage(e, Modifier.size(52.dp))
-                    Text(
-                        shown, color = Palette.fg, fontSize = 11.sp, lineHeight = 13.sp,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                        modifier = Modifier.width(72.dp),
-                    )
+                    IconLabel(shown, width) { AppIconImage(e, it) }
                 }
             } else {
-                Box(Modifier.width(76.dp).padding(8.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.width(width).padding(8.dp), contentAlignment = Alignment.Center) {
                     Text(pin.id.pkg.substringAfterLast('.').take(8), color = Palette.faint, fontSize = 10.sp)
                 }
             }
         }
         is Pin.Shortcut -> {
-            Column(
-                Modifier.width(76.dp).padding(top = 8.dp, bottom = 6.dp)
-                    .semantics { contentDescription = pin.label }
+            Box(
+                Modifier.semantics { contentDescription = pin.label }
                     .testTag("shortcut:${pin.pkg}/${pin.shortcutId}"),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                ShortcutIconImage(pin, Modifier.size(52.dp))
-                Text(
-                    pin.label, color = Palette.fg, fontSize = 11.sp, lineHeight = 13.sp,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                    modifier = Modifier.width(72.dp),
-                )
+                IconLabel(pin.label, width) { ShortcutIconImage(pin, it) }
             }
         }
         is Pin.FolderRef -> {
             val folder = folders[pin.folderId]
-            Column(
-                Modifier.width(76.dp).padding(top = 8.dp, bottom = 6.dp)
-                    .semantics { contentDescription = "Folder ${folder?.name.orEmpty()}" }
+            Box(
+                Modifier.semantics { contentDescription = "Folder ${folder?.name.orEmpty()}" }
                     .testTag("folderpin:${pin.folderId}"),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Box(
-                    Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)).background(Palette.cell).padding(6.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    val items = folder?.items.orEmpty().take(4)
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        for (r in items.chunked(2)) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                                for (p in r) {
-                                    when (p) {
-                                        is Pin.App -> byId[p.id]?.let { AppIconImage(it, Modifier.size(18.dp)) }
-                                        is Pin.Shortcut -> ShortcutIconImage(p, Modifier.size(18.dp))
-                                        is Pin.FolderRef -> Unit
+                IconLabel(folder?.name?.ifBlank { "Folder" } ?: "Folder", width) { m ->
+                    Box(
+                        m.clip(RoundedCornerShape(16.dp)).background(Palette.cell).padding(7.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        val items = folder?.items.orEmpty().take(4)
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            for (r in items.chunked(2)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    for (p in r) {
+                                        when (p) {
+                                            is Pin.App -> byId[p.id]?.let { AppIconImage(it, Modifier.size(16.dp)) }
+                                            is Pin.Shortcut -> ShortcutIconImage(p, Modifier.size(16.dp))
+                                            is Pin.FolderRef -> Unit
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-                Text(
-                    folder?.name?.ifBlank { "Folder" } ?: "Folder",
-                    color = Palette.fg, fontSize = 11.sp, lineHeight = 13.sp,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                    modifier = Modifier.width(72.dp),
-                )
             }
         }
     }
