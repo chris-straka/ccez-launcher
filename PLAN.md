@@ -73,12 +73,14 @@ meanings with More for the rest, Learning / Known toggles by lemma,
 synced like the keyboard's card. A language without its dictionary yet
 simply shows no card (`launcher sync <lang>` fetches it).
 
-## Stage 4: a word before a time-sink app
+## Stage 4: a word before a time-sink app — shipped
 
-Per app (owner picks: YouTube, Reddit, …), opening it from the launcher
-first shows one due learning word for a couple of seconds: Good / Again /
-Easy, then the app opens. Off by default per app; a hold on the app icon
-turns it on. Never blocks: a second tap on the icon goes straight through.
+Shipped 2026-11-11: per-app gates (hold an app → "Word first"), off by
+default. Opening a gated app first shows one due word — Again / Good /
+Easy (or the app's name to open ungraded, or a second tap on the icon
+straight through) — then the app opens. A slow word fetch never holds
+the launch up (800 ms at most). Needs home words on (`words.count`),
+since both come from the core's one screen-words call.
 
 ## Stage 5: the launcher speaks the languages
 
@@ -161,4 +163,6 @@ owner's install.
 
 Stage 2 shipped 2026-11-11: home words with meanings and grades through
 the core (see above). Stage 3 shipped the same day: word cards in
-search. 12 instrumented tests green. Next: Stage 4.
+search. Stage 4 shipped the same day: word gates before chosen apps
+(verified with YouTube on the emulator). 13 instrumented tests green.
+Next: Stage 5.
