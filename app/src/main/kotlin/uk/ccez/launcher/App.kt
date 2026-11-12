@@ -44,6 +44,14 @@ class App : Application() {
         apps.start()
         scope.launch { runCatching { Widgets.validate(this@App) } }
         seedPinsOnce()
+        // Pins follow the apps: on every new app list (installs and
+        // uninstalls bring one) and every new layout (a restore), a pin whose
+        // app is gone goes, and one whose app moved its entry point follows
+        // it. A pass that changes nothing writes nothing, so it settles.
+        scope.launch {
+            kotlinx.coroutines.flow.combine(apps.apps, layout.data) { list, _ -> list }
+                .collect { list -> if (apps.loaded.value && list.isNotEmpty()) reconcilePins(list) }
+        }
         // The word core wakes up after home does.
         scope.launch {
             kotlinx.coroutines.delay(2_000)
@@ -52,6 +60,36 @@ class App : Application() {
     }
 
     /** First run: a short row to start from (phone, messages, camera, settings). */
+    /**
+     * Pins of apps that aren't installed any more (owner, 2026-11-12: Samsung's
+     * Clock, uninstalled, stayed in the row as "clockpac" with no icon and
+     * no menu to unpin it) go; a pin whose app is there under another
+     * entry point (an update renamed it) moves to it. Only in profiles the
+     * list covered in full: a paused work profile's pins stay.
+     */
+    internal fun reconcilePins(list: List<AppEntry>) {
+        val ids = list.mapTo(HashSet()) { it.id }
+        val listed = apps.listedUsers
+        fun fixed(p: Pin): Pin? = when (p) {
+            is Pin.App -> when {
+                p.id in ids || p.id.user !in listed -> p
+                else -> list.firstOrNull { it.id.pkg == p.id.pkg && it.id.user == p.id.user }?.let { Pin.App(it.id) }
+            }
+            else -> p
+        }
+        val now = layout.data.value
+        val pins = now.pins.mapNotNull(::fixed)
+        val folders = now.folders.mapValues { (_, f) -> f.items.mapNotNull(::fixed) }
+        if (pins == now.pins && folders.all { (k, v) -> v == now.folders[k]?.items }) return
+        val gone = (now.pins + now.folders.values.flatMap { it.items }).count { fixed(it) == null }
+        layout.update { d ->
+            d.pins.clear()
+            d.pins.addAll(pins)
+            d.folders.values.forEach { f -> f.items.clear(); f.items.addAll(folders[f.id].orEmpty()) }
+        }
+        launcherLog.log("info", "pins-reconciled", "removed" to gone)
+    }
+
     private fun seedPinsOnce() {
         if (!layout.fresh) return
         scope.launch {

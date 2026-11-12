@@ -51,6 +51,12 @@ class AppRepository(private val ctx: Context, private val scope: CoroutineScope,
     private val icons = LruCache<String, Bitmap>(256)
     private val shortcutIcons = LruCache<String, Bitmap>(128)
 
+    /** The profiles (serials) whose apps the last refresh listed in full:
+     * on, not paused, with apps. A pin elsewhere is left alone (its app
+     * may only be hidden behind a paused work profile). */
+    @Volatile var listedUsers: Set<Long> = emptySet()
+        private set
+
     /** The Android 15 Private space profile, when the phone has one. */
     @Volatile var privateUser: UserHandle? = null
         private set
@@ -84,9 +90,11 @@ class AppRepository(private val ctx: Context, private val scope: CoroutineScope,
             if (users.isEmpty()) users.add(Process.myUserHandle())
             privateUser = users.firstOrNull { isPrivateProfile(it) }
             val out = ArrayList<AppEntry>()
+            val listed = HashSet<Long>()
             for (user in users) {
                 val serial = runCatching { um?.getSerialNumberForUser(user) ?: 0L }.getOrDefault(0L)
                 val list = runCatching { la.getActivityList(null, user) }.getOrNull().orEmpty()
+                if (list.isNotEmpty() && !isQuiet(user)) listed.add(serial)
                 for (info in list) {
                     val cn = info.componentName
                     if (cn.packageName == ctx.packageName) continue
@@ -95,6 +103,7 @@ class AppRepository(private val ctx: Context, private val scope: CoroutineScope,
                 }
             }
             out.sortBy { normalized(it.label) }
+            listedUsers = listed
             apps.value = out
             loaded.value = true
             icons.evictAll()
