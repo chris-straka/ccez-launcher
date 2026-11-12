@@ -40,8 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -99,12 +97,10 @@ import androidx.fragment.app.FragmentActivity
     val layout by app.layout.data.collectAsState()
     val settingsTick by app.settings.version.collectAsState()
     var query by remember { mutableStateOf("") }
-    val focus = remember { FocusRequester() }
+    // Opening the drawer leaves search alone: no focus, no keyboard
+    // (owner, 2026-11-12). A tap on the field brings both.
     val keyboard = LocalSoftwareKeyboardController.current
-    LaunchedEffect(Unit) {
-        focus.requestFocus()
-        keyboard?.show()
-    }
+    LaunchedEffect(Unit) { keyboard?.hide() }
 
     val privateUser = app.apps.privateUser
     val shownNames by AppNames.shown.collectAsState()
@@ -141,7 +137,7 @@ import androidx.fragment.app.FragmentActivity
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            modifier = Modifier.fillMaxWidth().padding(12.dp).focusRequester(focus).testTag("search"),
+            modifier = Modifier.fillMaxWidth().padding(12.dp).testTag("search"),
             singleLine = true,
             placeholder = { Text("Search", color = Palette.faint) },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
