@@ -42,6 +42,16 @@ class ClockWordsTest {
         assertEquals("dimanche premier novembre", ClockWords.date("fr", LocalDate.of(2026, 11, 1)))
     }
 
+    @Test fun frenchHoursAndMinutesAreFeminine() {
+        assertEquals("Il est vingt et une heures", ClockWords.time("fr", at(21, 0)))
+        assertEquals("Il est vingt et une heures vingt et une", ClockWords.time("fr", at(21, 21)))
+        assertEquals("Il est une heure une", ClockWords.time("fr", at(1, 1)))
+        assertEquals("Il est minuit une", ClockWords.time("fr", at(0, 1)))
+        assertEquals("Il est dix heures cinquante et une", ClockWords.time("fr", at(10, 51)))
+        assertEquals("Il est onze heures", ClockWords.time("fr", at(11, 0)))
+        assertEquals("Il est vingt-deux heures trente", ClockWords.time("fr", at(22, 30)))
+    }
+
     @Test fun germanOneOclockAndOrdinalDates() {
         assertEquals("Es ist ein Uhr", ClockWords.time("de", at(1, 0)))
         assertEquals("Es ist ein Uhr fünf", ClockWords.time("de", at(1, 5)))

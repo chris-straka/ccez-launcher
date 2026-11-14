@@ -253,6 +253,9 @@ object ClockWords {
         }
     }
 
+    /** French one before a feminine noun: un -> une, vingt et un -> vingt et une. */
+    private fun frFeminine(n: String): String = if (n == "un" || n.endsWith(" un")) n + "e" else n
+
     /** Korean clock hours are native numbers, on a 12-hour clock: 오후 세 시. */
     private fun koHour(h: Int): String {
         val native = listOf("열두", "한", "두", "세", "네", "다섯", "여섯", "일곱", "여덟", "아홉", "열", "열한")
@@ -270,12 +273,13 @@ object ClockWords {
         val ms = if (m == 0) "" else spell(lang, m)
         val text = when (lang) {
             "fr" -> {
+                // Heure and minute are feminine: vingt et une heures, une heure une.
                 val hour = when (h) {
                     0 -> "minuit"
                     1 -> "une heure"
-                    else -> "$hs heures"
+                    else -> "${frFeminine(hs)} heures"
                 }
-                if (m == 0) "Il est $hour" else "Il est $hour $ms"
+                if (m == 0) "Il est $hour" else "Il est $hour ${frFeminine(ms)}"
             }
             "de" -> {
                 // "ein Uhr", never "eins Uhr".
