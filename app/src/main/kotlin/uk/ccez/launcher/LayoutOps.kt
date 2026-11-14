@@ -150,6 +150,59 @@ object LayoutOps {
         }
     }
 
+    /**
+     * The menu's Unpin on a row pin: the pin the menu was opened for, at
+     * [index] when it is still there, else wherever it moved to since (an
+     * agent's move while the menu was up). False when it is gone.
+     */
+    fun unpinShown(d: LayoutData, index: Int, pin: Pin): Boolean {
+        val at = if (d.pins.getOrNull(index) == pin) index else d.pins.indexOf(pin)
+        if (at < 0) return false
+        unpin(d, Spot.Row(at))
+        return true
+    }
+
+    /** A shortcut pinned from a menu or another app's request: once only. */
+    fun addShortcutOnce(d: LayoutData, s: Pin.Shortcut): Boolean {
+        if (d.pins.any { it is Pin.Shortcut && it.pkg == s.pkg && it.shortcutId == s.shortcutId && it.user == s.user }) return false
+        d.pins.add(s)
+        return true
+    }
+
+    /**
+     * Pins follow the app list (App.reconcilePins): a pin whose app is
+     * listed stays; one in a profile the list didn't cover in full stays
+     * (a paused work profile); one whose package moved its entry point
+     * follows it ([movedTo]); one whose package is still installed and
+     * enabled stays ([installed]: mid-update, unavailable for a moment);
+     * the rest go. Folders are tidied after. Returns how many went.
+     */
+    fun reconcile(
+        d: LayoutData,
+        listedIds: Set<AppId>,
+        listedUsers: Set<Long>,
+        movedTo: (AppId) -> AppId?,
+        installed: (AppId) -> Boolean,
+    ): Int {
+        var gone = 0
+        fun fixed(p: Pin): Pin? = when {
+            p !is Pin.App -> p
+            p.id in listedIds || p.id.user !in listedUsers -> p
+            else -> movedTo(p.id)?.let { Pin.App(it) }
+                ?: if (installed(p.id)) p else null.also { gone++ }
+        }
+        val pins = d.pins.mapNotNull(::fixed)
+        d.pins.clear()
+        d.pins.addAll(pins)
+        for (f in d.folders.values) {
+            val items = f.items.mapNotNull(::fixed)
+            f.items.clear()
+            f.items.addAll(items)
+        }
+        tidyFolders(d)
+        return gone
+    }
+
     fun move(d: LayoutData, from: Int, to: Int) {
         if (from !in d.pins.indices) throw AgentError(rangeError("position", from, d.pins.size))
         if (to !in d.pins.indices) throw AgentError(rangeError("to", to, d.pins.size))
@@ -163,7 +216,7 @@ object LayoutOps {
         d.hidden.add(app.key)
         d.pins.removeAll { (it as? Pin.App)?.id == app.id }
         d.folders.values.forEach { f -> f.items.removeAll { (it as? Pin.App)?.id == app.id } }
-        dropEmptyFolders(d)
+        tidyFolders(d)
     }
 
     fun unhide(d: LayoutData, key: String, label: String) {
@@ -183,6 +236,8 @@ object LayoutOps {
         apps.firstOrNull { it.key in d.hidden }?.let { throw AgentError("${it.label} is hidden; unhide it first") }
         val existing = d.folders.values.firstOrNull { normalized(it.name) == normalized(n) }
         val wanted = apps.distinctBy { it.id }
+        // A one-app folder is just the app (owner, 2026-11-14).
+        if (existing == null && wanted.size < 2) throw AgentError("a new folder needs two apps or more")
         val ids = wanted.mapTo(HashSet()) { it.id }
         val firstAt = d.pins.indexOfFirst { (it as? Pin.App)?.id in ids }
         // Out of other folders; out of the row.
@@ -200,7 +255,8 @@ object LayoutOps {
             if (d.pins.none { (it as? Pin.FolderRef)?.folderId == f.id }) d.pins.add(Pin.FolderRef(f.id))
         }
         for (a in wanted) if (f.items.none { (it as? Pin.App)?.id == a.id }) f.items.add(Pin.App(a.id))
-        dropEmptyFolders(d)
+        // Folders the apps came out of may be down to one app, or none.
+        tidyFolders(d)
         return f to (existing == null)
     }
 
@@ -225,7 +281,6 @@ object LayoutOps {
     fun gate(d: LayoutData, key: String, on: Boolean): Boolean =
         if (on) d.gates.add(key) else d.gates.remove(key)
 
-    /** A folder with nothing left goes, and its place in the row. */
     /**
      * Empty folders go, and a folder down to one item becomes that item in
      * its row place (owner, 2026-11-14: a one-app folder still acted as a
@@ -278,4 +333,29 @@ object LayoutOps {
 
     private fun rangeError(what: String, n: Int, size: Int): String =
         if (size == 0) "$what $n: nothing there" else "$what $n is out of range (0–${size - 1})"
+}
+
+/**
+ * What a dock cell holds right now, resolved at the moment of the tap or
+ * hold from the live row (never from the row as it was when the cell's
+ * gesture handler started). Generic over the app entry so unit tests run
+ * without Android.
+ */
+sealed class PinTarget<out E> {
+    data class AppPin<E>(val entry: E) : PinTarget<E>()
+    data class ShortcutPin(val pin: Pin.Shortcut) : PinTarget<Nothing>()
+    data class FolderPin(val folder: Folder) : PinTarget<Nothing>()
+    /** An app pin whose app isn't in the list (mid-update): only Unpin. */
+    data class GoneApp(val pin: Pin.App) : PinTarget<Nothing>()
+
+    companion object {
+        fun <E> at(pins: List<Pin>, index: Int, byId: Map<AppId, E>, folders: Map<String, Folder>): PinTarget<E>? =
+            when (val pin = pins.getOrNull(index)) {
+                // Before the app list lands, nothing (not a stray Unpin).
+                is Pin.App -> byId[pin.id]?.let { AppPin(it) } ?: if (byId.isEmpty()) null else GoneApp(pin)
+                is Pin.Shortcut -> ShortcutPin(pin)
+                is Pin.FolderRef -> folders[pin.folderId]?.let { FolderPin(it) }
+                null -> null
+            }
+    }
 }

@@ -23,7 +23,9 @@ class App : Application() {
     /** Background work. A failure is logged, never a dead home screen. */
     val scope = CoroutineScope(
         SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, e ->
-            runCatching { launcherLog.log("error", "job-failed", "error" to e.toString()) }
+            runCatching {
+                launcherLog.log("error", "job-failed", "error" to e.toString(), "stack" to android.util.Log.getStackTraceString(e))
+            }
         },
     )
 
@@ -36,7 +38,9 @@ class App : Application() {
         super.onCreate()
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
-            runCatching { launcherLog.log("error", "crash", "thread" to t.name, "error" to e.toString()) }
+            runCatching {
+                launcherLog.log("error", "crash", "thread" to t.name, "error" to e.toString(), "stack" to android.util.Log.getStackTraceString(e))
+            }
             previous?.uncaughtException(t, e)
         }
         launcherLog.log("info", "start", "version" to BuildConfig.VERSION_NAME)
@@ -59,37 +63,31 @@ class App : Application() {
         }
     }
 
-    /** First run: a short row to start from (phone, messages, camera, settings). */
     /**
      * Pins of apps that aren't installed any more (owner, 2026-11-12: Samsung's
      * Clock, uninstalled, stayed in the row as "clockpac" with no icon and
      * no menu to unpin it) go; a pin whose app is there under another
      * entry point (an update renamed it) moves to it. Only in profiles the
-     * list covered in full: a paused work profile's pins stay.
+     * list covered in full: a paused work profile's pins stay. A package
+     * still installed and enabled keeps its pin and folder place even when
+     * one listing misses it (mid-update, unavailable for a moment), and a
+     * folder left with one app becomes the app (LayoutOps.reconcile).
      */
     internal fun reconcilePins(list: List<AppEntry>) {
         val ids = list.mapTo(HashSet()) { it.id }
         val listed = apps.listedUsers
-        fun fixed(p: Pin): Pin? = when (p) {
-            is Pin.App -> when {
-                p.id in ids || p.id.user !in listed -> p
-                else -> list.firstOrNull { it.id.pkg == p.id.pkg && it.id.user == p.id.user }?.let { Pin.App(it.id) }
-            }
-            else -> p
-        }
+        val movedTo = { id: AppId -> list.firstOrNull { it.id.pkg == id.pkg && it.id.user == id.user }?.id }
+        val installed = { id: AppId -> apps.isInstalledAndEnabled(id) }
         val now = layout.data.value
-        val pins = now.pins.mapNotNull(::fixed)
-        val folders = now.folders.mapValues { (_, f) -> f.items.mapNotNull(::fixed) }
-        if (pins == now.pins && folders.all { (k, v) -> v == now.folders[k]?.items }) return
-        val gone = (now.pins + now.folders.values.flatMap { it.items }).count { fixed(it) == null }
-        layout.update { d ->
-            d.pins.clear()
-            d.pins.addAll(pins)
-            d.folders.values.forEach { f -> f.items.clear(); f.items.addAll(folders[f.id].orEmpty()) }
-        }
+        val trial = now.copyDeep()
+        LayoutOps.reconcile(trial, ids, listed, movedTo, installed)
+        if (trial.pins == now.pins && trial.folders == now.folders) return
+        var gone = 0
+        layout.update { d -> gone = LayoutOps.reconcile(d, ids, listed, movedTo, installed) }
         launcherLog.log("info", "pins-reconciled", "removed" to gone)
     }
 
+    /** First run: a short row to start from (phone, messages, camera, settings). */
     private fun seedPinsOnce() {
         if (!layout.fresh) return
         scope.launch {

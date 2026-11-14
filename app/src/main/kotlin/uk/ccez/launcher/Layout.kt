@@ -70,6 +70,16 @@ data class LayoutData(
     var nextFolder: Int = 1,
     val widgets: MutableList<WidgetEntry> = mutableListOf(),
 ) {
+    /** A copy whose lists and folders can change without touching this one. */
+    fun copyDeep(): LayoutData = LayoutData(
+        pins.toMutableList(),
+        folders.mapValues { (_, f) -> Folder(f.id, f.name, f.items.toMutableList()) }.toMutableMap(),
+        hidden.toMutableSet(),
+        gates.toMutableSet(),
+        nextFolder,
+        widgets.toMutableList(),
+    )
+
     fun toJson(): String {
         val o = JSONObject()
         o.put("pins", JSONArray().apply { pins.forEach { put(it.toJson()) } })
@@ -133,25 +143,50 @@ data class LayoutData(
 
 class LayoutStore(dir: File, private val log: LauncherLog) {
     private val file = File(dir, "layout.json")
-    val data = MutableStateFlow(load())
+    /** The layout as it was before the last save: the fallback for a bad file. */
+    private val backup = File(dir, "layout.json.bak")
 
-    /** True when no layout file was there (first run: seed the pins). */
+    /** True when no usable layout was there (first run, or nothing to fall back to): seed the pins. */
     var fresh: Boolean = false
         private set
 
+    val data = MutableStateFlow(load())
+
+    private fun read(f: File): LayoutData =
+        // One-app folders left by older builds become their app.
+        LayoutData.parse(f.readText()).also { LayoutOps.tidyFolders(it) }
+
     private fun load(): LayoutData {
         if (!file.exists()) {
+            fresh = !backup.exists()
+            if (fresh) return LayoutData()
+        } else {
+            try {
+                return read(file)
+            } catch (e: Exception) {
+                // Kept for a look, never overwritten by the next one.
+                val bad = File(file.parentFile, "layout.json.bad-${System.currentTimeMillis()}")
+                log.log("error", "layout-bad-file", "error" to e.toString(), "kept" to bad.name)
+                runCatching { file.renameTo(bad) }
+            }
+        }
+        if (!backup.exists()) {
             fresh = true
             return LayoutData()
         }
         return try {
-            // One-app folders left by older builds become their app.
-            LayoutData.parse(file.readText()).also { LayoutOps.tidyFolders(it) }
+            read(backup).also { log.log("warn", "layout-from-backup") }
         } catch (e: Exception) {
-            log.log("error", "layout-bad-file", "error" to e.toString())
-            runCatching { file.renameTo(File(file.parentFile, "layout.json.bad")) }
+            log.log("error", "layout-bad-backup", "error" to e.toString())
+            fresh = true
             LayoutData()
         }
+    }
+
+    private fun save(d: LayoutData) {
+        // The file as it stands is the last good save: kept as the fallback.
+        if (file.exists()) runCatching { writeSafely(backup, file.readText()) }
+        writeSafely(file, d.toJson())
     }
 
     /** Every change goes through here: mutate a copy's lists, save, publish. */
@@ -159,22 +194,14 @@ class LayoutStore(dir: File, private val log: LauncherLog) {
         // A copy changed, never the one on screen: changed in place, the old
         // value already held the change, Compose's remember keys saw no
         // difference and the open drawer kept a hidden app (2026-11-11).
-        val old = data.value
-        val d = LayoutData(
-            old.pins.toMutableList(),
-            old.folders.mapValues { (_, f) -> Folder(f.id, f.name, f.items.toMutableList()) }.toMutableMap(),
-            old.hidden.toMutableSet(),
-            old.gates.toMutableSet(),
-            old.nextFolder,
-            old.widgets.toMutableList(),
-        )
+        val d = data.value.copyDeep()
         block(d)
-        writeSafely(file, d.toJson())
+        save(d)
         data.value = d
     }
 
     @Synchronized fun replace(d: LayoutData) {
-        writeSafely(file, d.toJson())
+        save(d)
         data.value = d
     }
 }

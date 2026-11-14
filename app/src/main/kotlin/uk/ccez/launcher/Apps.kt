@@ -127,6 +127,16 @@ class AppRepository(private val ctx: Context, private val scope: CoroutineScope,
             .onFailure { log.log("warn", "profile-unlock-failed", "error" to it.toString()) }
     }
 
+    /**
+     * Whether [id]'s package is still installed and enabled for its user,
+     * listed or not (a Play update takes it out of the list for a moment).
+     * Uninstalled, or disabled by the owner: false.
+     */
+    fun isInstalledAndEnabled(id: AppId): Boolean {
+        val la = launcherApps ?: return true
+        return runCatching { la.getApplicationInfo(id.pkg, 0, userForSerial(id.user)).enabled }.getOrDefault(false)
+    }
+
     fun byKey(key: String): AppEntry? = apps.value.firstOrNull { it.key == key }
     fun byId(id: AppId): AppEntry? = apps.value.firstOrNull { it.id == id }
 

@@ -128,6 +128,8 @@ dependencies {
     // App names in the learning languages (Stage 5), translated on the phone.
     implementation(libs.mlkit.translate)
     testImplementation(libs.junit)
+    // The real org.json for unit tests of the layout file (android.jar's is stubs).
+    testImplementation(libs.json)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(platform(libs.compose.bom))

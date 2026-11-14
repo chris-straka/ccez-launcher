@@ -110,12 +110,15 @@ class LayoutOpsTest {
 
     @Test fun hideTakesTheAppOffHomeEverywhere() {
         val d = row(chrome, camera)
-        LayoutOps.folder(d, "Time", listOf(clock))
+        LayoutOps.folder(d, "Time", listOf(clock, calendar))
         LayoutOps.hide(d, chrome)
         LayoutOps.hide(d, clock)
         assertTrue(chrome.key in d.hidden && clock.key in d.hidden)
-        assertEquals(listOf("Camera"), names(d))
+        // The folder down to Calendar alone became Calendar.
+        assertEquals(listOf("Camera", "Calendar"), names(d))
         assertTrue(d.folders.isEmpty())
+        LayoutOps.hide(d, calendar)
+        assertEquals(listOf("Camera"), names(d))
         assertTrue(refused { LayoutOps.hide(d, chrome) }.contains("already hidden"))
         LayoutOps.unhide(d, chrome.key, chrome.label)
         assertFalse(chrome.key in d.hidden)
@@ -135,20 +138,29 @@ class LayoutOpsTest {
         assertEquals(3, again.items.size)
         assertEquals(listOf("Camera", "Time"), names(d))
         // Unpinned apps make a folder at the end.
-        val (g, _) = LayoutOps.folder(d, "Look", listOf(reglages))
+        val more = AppRef(AppId("fr.example.horloge", ".Main", 0), "Horloge")
+        val (g, _) = LayoutOps.folder(d, "Look", listOf(reglages, more))
         assertEquals(Pin.FolderRef(g.id), d.pins.last())
         refused { LayoutOps.folder(d, " ", listOf(camera)) }
         refused { LayoutOps.folder(d, "Empty", emptyList()) }
+        // A new folder of one app is just the app: refused, nothing changed.
+        val before = names(d)
+        assertTrue(refused { LayoutOps.folder(d, "Seul", listOf(camera)) }.contains("two apps"))
+        assertEquals(before, names(d))
     }
 
     @Test fun anAppMovesBetweenFolders() {
-        val d = row(chrome, camera, clock)
-        LayoutOps.folder(d, "A", listOf(chrome, camera))
+        val d = row(chrome, camera, clock, calendar)
+        LayoutOps.folder(d, "A", listOf(chrome, camera, calendar))
         LayoutOps.folder(d, "B", listOf(camera, clock))
         val a = LayoutOps.findFolder(d, "A")
         val b = LayoutOps.findFolder(d, "B")
-        assertEquals(listOf<Pin>(Pin.App(chrome.id)), a.items)
+        assertEquals(listOf<Pin>(Pin.App(chrome.id), Pin.App(calendar.id)), a.items)
         assertEquals(listOf<Pin>(Pin.App(camera.id), Pin.App(clock.id)), b.items)
+        // Taking Calendar too leaves A with Chrome alone: A becomes Chrome.
+        LayoutOps.folder(d, "B", listOf(calendar))
+        assertEquals(listOf("Chrome", "B"), names(d))
+        assertEquals(setOf(b.id), d.folders.keys)
     }
 
     @Test fun unfolderPutsItemsBackInPlace() {
@@ -162,8 +174,8 @@ class LayoutOpsTest {
 
     @Test fun renameRefusesClashesAndBlanks() {
         val d = row(chrome, camera, clock)
-        LayoutOps.folder(d, "Web", listOf(chrome))
-        LayoutOps.folder(d, "Photo", listOf(camera))
+        LayoutOps.folder(d, "Web", listOf(chrome, calendar))
+        LayoutOps.folder(d, "Photo", listOf(camera, clock))
         val web = LayoutOps.findFolder(d, "web")
         assertTrue(refused { LayoutOps.renameFolder(d, web, "photo") }.contains("already a folder"))
         refused { LayoutOps.renameFolder(d, web, "") }
@@ -212,5 +224,82 @@ class LayoutOpsTest {
         LayoutOps.tidyFolders(d)
         assertTrue(d.folders.isEmpty())
         assertEquals(listOf(chrome, camera).map { it.id }, d.pins.map { (it as Pin.App).id })
+    }
+
+    // --- review 2026-11-14 ---
+
+    private val horloge = AppRef(AppId("fr.example.horloge", ".Horloge", 0), "Horloge")
+    private val agenda = AppRef(AppId("de.example.kalender", ".Kalender", 0), "Kalender")
+    private val karte = AppRef(AppId("de.example.karte", ".Karte", 0), "Karte")
+    private val bureau = AppRef(AppId("fr.example.bureau", ".Bureau", 10), "Bureau", "work")
+
+    private fun reconcile(d: LayoutData, listed: List<AppRef>, installed: Set<AppId> = emptySet(), users: Set<Long> = setOf(0)): Int =
+        LayoutOps.reconcile(
+            d, listed.mapTo(HashSet()) { it.id }, users,
+            movedTo = { id -> listed.firstOrNull { it.id.pkg == id.pkg && it.id.user == id.user }?.id },
+            installed = { it in installed },
+        )
+
+    @Test fun aCellResolvesToThePinItShowsAfterAMove() {
+        val d = row(horloge, agenda, karte)
+        val byId = listOf(horloge, agenda, karte).associate { it.id to it.label }
+        LayoutOps.drop(d, 0, 2, middle = false, after = true) // Horloge to the end
+        assertEquals(PinTarget.AppPin("Kalender"), PinTarget.at(d.pins, 0, byId, d.folders))
+        assertEquals(PinTarget.AppPin("Horloge"), PinTarget.at(d.pins, 2, byId, d.folders))
+        assertEquals(null, PinTarget.at(d.pins, 3, byId, d.folders))
+        // Before the app list lands: nothing, not an Unpin-only menu.
+        assertEquals(null, PinTarget.at(d.pins, 0, emptyMap<AppId, String>(), d.folders))
+        // An app missing from a loaded list: only Unpin.
+        val partial = mapOf(agenda.id to "Kalender")
+        assertEquals(PinTarget.GoneApp(Pin.App(karte.id)), PinTarget.at(d.pins, 1, partial, d.folders))
+    }
+
+    @Test fun unpinFromTheMenuTakesThePinItWasOpenedFor() {
+        val d = row(horloge, agenda, karte)
+        val shown = Pin.App(horloge.id)
+        LayoutOps.move(d, 0, 2) // moved while the menu was up
+        assertTrue(LayoutOps.unpinShown(d, 0, shown))
+        assertEquals(listOf<Pin>(Pin.App(agenda.id), Pin.App(karte.id)), d.pins)
+        assertFalse(LayoutOps.unpinShown(d, 0, shown))
+    }
+
+    @Test fun shortcutsFromMenusPinOnce() {
+        val d = row(horloge)
+        val s = Pin.Shortcut(horloge.id.pkg, "minuteur", 0, "Minuteur")
+        assertTrue(LayoutOps.addShortcutOnce(d, s))
+        assertFalse(LayoutOps.addShortcutOnce(d, s.copy(label = "Minuteur 2")))
+        assertEquals(2, d.pins.size)
+    }
+
+    @Test fun anUninstalledAppLeavesItsFolderTidy() {
+        val d = row(horloge, agenda, karte)
+        LayoutOps.folder(d, "Zeit", listOf(horloge, agenda))
+        // Kalender uninstalled: the folder is down to Horloge, which takes its place.
+        assertEquals(1, reconcile(d, listOf(horloge, karte)))
+        assertEquals(listOf<Pin>(Pin.App(horloge.id), Pin.App(karte.id)), d.pins)
+        assertTrue(d.folders.isEmpty())
+        // Both of a folder's apps uninstalled: no empty folder stays.
+        val e = row(horloge, agenda, karte)
+        LayoutOps.folder(e, "Zeit", listOf(horloge, agenda))
+        assertEquals(2, reconcile(e, listOf(karte)))
+        assertEquals(listOf<Pin>(Pin.App(karte.id)), e.pins)
+        assertTrue(e.folders.isEmpty())
+    }
+
+    @Test fun anAppMissingFromOneListingButStillInstalledKeepsItsPlace() {
+        val d = row(horloge, agenda, karte)
+        LayoutOps.folder(d, "Zeit", listOf(agenda, karte))
+        // Mid-update: Kalender isn't listed but is installed and enabled.
+        assertEquals(0, reconcile(d, listOf(horloge, karte), installed = setOf(agenda.id)))
+        assertEquals(2, d.pins.size)
+        assertEquals(2, d.folders.values.single().items.size)
+    }
+
+    @Test fun pinsFollowAMovedEntryPointAndPausedProfilesStay() {
+        val d = row(horloge, bureau)
+        val renamed = horloge.copy(id = horloge.id.copy(cls = ".NeueHorloge"))
+        // The work profile (user 10) wasn't listed in full: its pin stays.
+        assertEquals(0, reconcile(d, listOf(renamed), users = setOf(0)))
+        assertEquals(listOf<Pin>(Pin.App(renamed.id), Pin.App(bureau.id)), d.pins)
     }
 }

@@ -39,11 +39,18 @@ class LauncherLog(dir: File) {
     }
 }
 
-/** Written whole or not at all (as in the Rust core). */
+/**
+ * Written whole or not at all (as in the Rust core): to a temporary file,
+ * synced to the disk, then renamed over. Without the sync a power cut
+ * could leave the renamed file empty (review 2026-11-14).
+ */
 internal fun writeSafely(file: File, text: String) {
     file.parentFile?.mkdirs()
     val tmp = File(file.parentFile, file.name + ".tmp")
-    tmp.writeText(text)
+    java.io.FileOutputStream(tmp).use { out ->
+        out.write(text.toByteArray())
+        out.fd.sync()
+    }
     if (!tmp.renameTo(file)) {
         file.writeText(text)
         tmp.delete()
