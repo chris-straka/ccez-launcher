@@ -29,11 +29,13 @@ with a release the owner can install.
   z: `~/Library/Android/sdk`), screenshots in `$FLEET_ARTIFACTS`. Never the
   owner's phone unless the owner asks that turn. Silent: emulator with
   `-no-audio`.
-- Releases: private GitHub repo `chris-straka/ccez-launcher`; a signed APK
-  per release (new keystore in `~/.config/ccez-launcher/`, backed up, never
-  regenerated), self-update from GitHub releases as ccez-keys' keyboard does
-  (`android/.../update/Updater.kt` there). No GitHub Actions (private repo,
-  minutes are out): build and release locally with a `scripts/release.sh`.
+- Releases: GitHub repo `chris-straka/ccez-launcher` (public since
+  2026-11-12); a signed APK per release (keystore in
+  `~/.config/ccez-launcher/`, backed up, never regenerated), self-update
+  from GitHub releases as ccez-keys' keyboard does (`android/.../update/
+  Updater.kt` there). No GitHub Actions: build and release locally with
+  `scripts/release.sh`, which refuses a ccez-keys core with uncommitted
+  changes and names the core commit in the release notes.
 
 ## Stage 1: a launcher that's good at being a launcher — shipped
 
@@ -169,6 +171,22 @@ isn't installed there.
 - Anything that needs Google Play services.
 
 ## Status
+
+2026-11-14, review fixes (unit tests 45, all pass; instrumented tests
+written, not run: no emulator this pass): dock cells act on the pin they
+show after a move or a late app list; the word gate keeps every touch;
+the clock speaks the current time and changes language at midnight; an
+app missing from one listing keeps its pin while still installed, and
+folders tidy after uninstall, hide and `folder` (a new one-app folder is
+refused); widgets sized in dp, together at most a quarter of the screen;
+pinned widgets ask Android's bind permission instead of being dropped;
+Continue counts only drawer apps; Ask drops focus on send; home words
+fetch only in front; clock words fixed for de, zh, ko, fr, es, it, pt;
+icons with spoken names for Save, Dismiss, Pin and Back; settings without
+helper lines; 48 dp touch areas; layout saves synced with a `.bak`
+fallback; stack traces in the log; `launcher restore` prints the phone's
+answer. Open: goldens for settings and the clip strip need a fresh
+`scripts/shots.sh` run on launcher_avd; the S24 checks below still stand.
 
 2026-11-12: agent commands for the layout (see "Run by agents"): apps,
 pins, pin/unpin/move, hide/unhide/hidden, folders, gate, open, home,
