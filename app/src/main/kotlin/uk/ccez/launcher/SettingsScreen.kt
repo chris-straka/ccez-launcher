@@ -126,6 +126,10 @@ import androidx.compose.ui.unit.sp
                 if (v == app.settings.get(def.key)) return
                 runCatching { app.settings.set(def.key, org.json.JSONObject.quote(v)); app.settingsChanged() }
             }
+            // And when Settings goes (Back, or the home button, which shows
+            // home): a focused field never hears it lost focus then.
+            val saveNow by androidx.compose.runtime.rememberUpdatedState { save() }
+            androidx.compose.runtime.DisposableEffect(def.key) { onDispose { saveNow() } }
             var focused by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
             androidx.compose.material3.OutlinedTextField(
                 value = text,
@@ -169,15 +173,17 @@ import androidx.compose.ui.unit.sp
             }
             is SettingDefs.Kind.IntRange -> {
                 val v = remember(tick, def.key) { app.settings.number(def.key) }
-                TextButton(
-                    onClick = { app.settings.set(def.key, (v - 1).toString()); app.settingsChanged() },
-                    enabled = v > k.min,
-                ) { Text("−", color = if (v > k.min) Palette.accent else Palette.faint, fontSize = 20.sp) }
+                IconAction(
+                    LauncherIcons.Remove, "Fewer", Modifier.testTag("less:${def.key}"),
+                    tint = if (v > k.min) Palette.accent else Palette.faint,
+                    onClick = if (v > k.min) ({ app.settings.set(def.key, (v - 1).toString()); app.settingsChanged() }) else null,
+                )
                 Text(v.toString(), color = Palette.fg, fontSize = 16.sp)
-                TextButton(
-                    onClick = { app.settings.set(def.key, (v + 1).toString()); app.settingsChanged() },
-                    enabled = v < k.max,
-                ) { Text("+", color = if (v < k.max) Palette.accent else Palette.faint, fontSize = 20.sp) }
+                IconAction(
+                    LauncherIcons.Add, "More", Modifier.testTag("more:${def.key}"),
+                    tint = if (v < k.max) Palette.accent else Palette.faint,
+                    onClick = if (v < k.max) ({ app.settings.set(def.key, (v + 1).toString()); app.settingsChanged() }) else null,
+                )
             }
             SettingDefs.Kind.Text -> Unit
         }

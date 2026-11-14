@@ -307,6 +307,18 @@ sealed class MenuAction {
     }
 }
 
+/** A pinned app that isn't listed (disabled, archived, uninstalled): its name while Android still has it, else its package. */
+@Composable private fun goneLabel(pkg: String): String {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    return remember(pkg) {
+        runCatching {
+            val pm = ctx.packageManager
+            val flags = if (android.os.Build.VERSION.SDK_INT >= 24) android.content.pm.PackageManager.MATCH_UNINSTALLED_PACKAGES else 0
+            pm.getApplicationLabel(pm.getApplicationInfo(pkg, flags)).toString().ifBlank { null }
+        }.getOrNull() ?: pkg
+    }
+}
+
 @Composable fun AppMenuDialog(
     target: MenuTarget,
     pinned: Boolean,
@@ -324,7 +336,7 @@ sealed class MenuAction {
     val title = when (target) {
         is MenuTarget.HomeShortcut -> target.pin.label
         is MenuTarget.HomeFolder -> target.folder.name.ifBlank { "Folder" }
-        is MenuTarget.HomeGone -> target.pin.id.pkg
+        is MenuTarget.HomeGone -> goneLabel(target.pin.id.pkg)
         is MenuTarget.FolderItem -> (target.pin as? Pin.Shortcut)?.label ?: entry?.label.orEmpty()
         else -> entry?.label.orEmpty()
     }
