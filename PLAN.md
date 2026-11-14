@@ -172,6 +172,17 @@ isn't installed there.
 
 ## Status
 
+2026-11-14, second pass on the review fixes (unit tests 48, all pass;
+instrumented tests compile, not run: no emulator this pass): the moved-cell
+tests now tell the fix from the bug (the held cell's menu is titled with
+the app it shows; a tap after a move launches that app); French clock
+hours and minutes are feminine (vingt et une heures, une heure une);
+layout saves run on their own thread, in order, the last change winning;
+the server field is also saved when Settings closes; number settings use
+icons; a pinned app no longer listed is named, not shown as its package;
+`release.sh` refuses uncommitted ccez-keys data, Cargo.toml or Cargo.lock
+too, and the core build reruns when they change.
+
 2026-11-14, review fixes (unit tests 45, all pass; instrumented tests
 written, not run: no emulator this pass): dock cells act on the pin they
 show after a move or a late app list; the word gate keeps every touch;
