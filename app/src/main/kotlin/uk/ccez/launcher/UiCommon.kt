@@ -222,12 +222,14 @@ sealed class MenuTarget {
     data class HomeApp(val index: Int, val entry: AppEntry) : MenuTarget()
     data class HomeShortcut(val index: Int, val pin: Pin.Shortcut) : MenuTarget()
     data class HomeFolder(val index: Int, val folder: Folder) : MenuTarget()
+    /** A pinned app that isn't in the app list: it can only be unpinned. */
+    data class HomeGone(val index: Int, val pin: Pin.App) : MenuTarget()
     data class FolderItem(val folderId: String, val index: Int, val pin: Pin) : MenuTarget()
 }
 
 sealed class MenuAction {
     data class PinApp(val entry: AppEntry) : MenuAction()
-    data class Unpin(val index: Int) : MenuAction()
+    data class Unpin(val index: Int, val pin: Pin) : MenuAction()
     data class Hide(val entry: AppEntry) : MenuAction()
     data class Unhide(val entry: AppEntry) : MenuAction()
     data class Info(val entry: AppEntry) : MenuAction()
@@ -236,7 +238,7 @@ sealed class MenuAction {
     data class PinShortcut(val entry: AppEntry, val shortcut: ShortcutInfo) : MenuAction()
     data class ToggleGate(val entry: AppEntry, val on: Boolean) : MenuAction()
     data class RemoveFromFolder(val folderId: String, val index: Int) : MenuAction()
-    data class DissolveFolder(val index: Int) : MenuAction()
+    data class DissolveFolder(val folderId: String) : MenuAction()
     data class RenameFolder(val folder: Folder, val name: String) : MenuAction()
 }
 
@@ -322,6 +324,8 @@ sealed class MenuAction {
     val title = when (target) {
         is MenuTarget.HomeShortcut -> target.pin.label
         is MenuTarget.HomeFolder -> target.folder.name.ifBlank { "Folder" }
+        is MenuTarget.HomeGone -> target.pin.id.pkg
+        is MenuTarget.FolderItem -> (target.pin as? Pin.Shortcut)?.label ?: entry?.label.orEmpty()
         else -> entry?.label.orEmpty()
     }
     val shortcuts by produceState<List<ShortcutInfo>>(emptyList(), entry?.key) {
@@ -332,6 +336,7 @@ sealed class MenuAction {
     val icon: (@Composable (Modifier) -> Unit)? = when {
         entry != null -> { m -> AppIconImage(entry, m) }
         target is MenuTarget.HomeShortcut -> { m -> ShortcutIconImage(target.pin, m) }
+        target is MenuTarget.FolderItem && target.pin is Pin.Shortcut -> { m -> ShortcutIconImage(target.pin, m) }
         else -> null
     }
 
@@ -343,11 +348,14 @@ sealed class MenuAction {
                 MenuRow("Hide", "menu-hide") { onAction(MenuAction.Hide(target.entry)) }
             }
             is MenuTarget.HiddenApp -> MenuRow("Unhide", "menu-unhide") { onAction(MenuAction.Unhide(target.entry)) }
-            is MenuTarget.HomeApp -> MenuRow("Unpin", "menu-unpin") { onAction(MenuAction.Unpin(target.index)) }
-            is MenuTarget.HomeShortcut -> MenuRow("Unpin", "menu-unpin") { onAction(MenuAction.Unpin(target.index)) }
+            is MenuTarget.HomeApp -> MenuRow("Unpin", "menu-unpin") {
+                onAction(MenuAction.Unpin(target.index, Pin.App(target.entry.id)))
+            }
+            is MenuTarget.HomeShortcut -> MenuRow("Unpin", "menu-unpin") { onAction(MenuAction.Unpin(target.index, target.pin)) }
+            is MenuTarget.HomeGone -> MenuRow("Unpin", "menu-unpin") { onAction(MenuAction.Unpin(target.index, target.pin)) }
             is MenuTarget.HomeFolder -> {
                 MenuRow("Rename", "menu-rename") { renaming = true }
-                MenuRow("Remove folder", "menu-dissolve") { onAction(MenuAction.DissolveFolder(target.index)) }
+                MenuRow("Remove folder", "menu-dissolve") { onAction(MenuAction.DissolveFolder(target.folder.id)) }
             }
             is MenuTarget.FolderItem -> MenuRow("Take out", "menu-takeout") {
                 onAction(MenuAction.RemoveFromFolder(target.folderId, target.index))
@@ -364,12 +372,10 @@ sealed class MenuAction {
                     Box(Modifier.weight(1f)) {
                         MenuRow(label, "menu-shortcut") { onAction(MenuAction.StartShortcut(entry, si)) }
                     }
-                    Text(
-                        "Pin", color = Palette.accent, fontSize = Look.smallSize,
-                        modifier = Modifier.clip(RoundedCornerShape(12.dp))
-                            .clickable { onAction(MenuAction.PinShortcut(entry, si)) }
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
-                    )
+                    IconAction(
+                        LauncherIcons.Pin, "Pin $label", Modifier.padding(end = 8.dp).testTag("menu-pin-shortcut"),
+                        tint = Palette.dim,
+                    ) { onAction(MenuAction.PinShortcut(entry, si)) }
                 }
             }
             Hairline(Modifier.padding(vertical = 6.dp))

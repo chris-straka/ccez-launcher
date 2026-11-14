@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.ui.semantics.selected
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,7 +76,8 @@ data class WordHit(val lang: String, val typed: String, val card: Card)
 @Composable private fun StatusChip(text: String, on: Boolean, tag: String, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     Box(
-        Modifier.clip(shape)
+        // A 36 dp pill in a 48 dp touch area.
+        Modifier.minimumInteractiveComponentSize().clip(shape)
             .then(if (on) Modifier.background(Palette.accent.copy(alpha = 0.16f)) else Modifier.border(1.dp, Palette.line, shape))
             .clickable(onClick = onClick)
             .semantics { selected = on }
@@ -182,7 +185,8 @@ data class WordHit(val lang: String, val typed: String, val card: Card)
                     if (more) "Less" else "More",
                     color = Palette.dim, fontSize = 14.sp,
                     modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable { more = !more }
-                        .padding(horizontal = 10.dp, vertical = 8.dp).testTag("word-more"),
+                        .heightIn(min = 48.dp).wrapContentHeight()
+                        .padding(horizontal = 12.dp, vertical = 12.dp).testTag("word-more"),
                 )
             }
         }

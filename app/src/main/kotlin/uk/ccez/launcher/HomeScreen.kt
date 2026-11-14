@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -135,8 +136,10 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
             delay((60_000 - intoMinute).coerceAtLeast(250))
         }
     }
-    // The learning language of the day, once the core is up.
-    val lang by androidx.compose.runtime.produceState<String?>(null, inLang) {
+    // The learning language of the day, once the core is up; picked again
+    // when the day turns (it rotates daily, PLAN Stage 5).
+    val today = now.toLocalDate()
+    val lang by androidx.compose.runtime.produceState<String?>(null, inLang, today) {
         if (!inLang) return@produceState
         repeat(24) {
             val l = LangOfDay.todayFromCore()
@@ -159,15 +162,18 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
             now.format(DateTimeFormatter.ofPattern("EEEE d MMMM", java.util.Locale.ENGLISH))
         }
     }
+    val saying by rememberUpdatedState(spoken to "$time. $date")
     // Big, thin, on the left margin. Its scale follows the font size only so
     // far: past 1.3x it would wrap a four-digit time.
     val fontScale = LocalDensity.current.fontScale
     val cap = if (fontScale > 1.3f) 1.3f / fontScale else 1f
     Column(
         Modifier.fillMaxWidth().padding(top = 40.dp, start = Look.margin, end = Look.margin)
-            .pointerInput(spoken) {
+            .pointerInput(Unit) {
+                // Read at the tap: the handler outlives the minute it began in.
                 detectTapGestures(onTap = {
-                    if (spoken != null) Speaker.say(ctx, "$time. $date", spoken)
+                    val (lang, said) = saying
+                    if (lang != null) Speaker.say(ctx, said, lang)
                 })
             }
             .semantics { contentDescription = "$time, $date" }
@@ -206,6 +212,9 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
     val isHome = remember(settingsTick) { app.apps.isDefaultHome() }
     var folderOpen by remember { mutableStateOf<Folder?>(null) }
 
+    // Widgets together take at most a quarter of the screen, so the clock,
+    // the strips and the pins below them still fit on a phone.
+    val widgetCap = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp / 4
     Column(
         Modifier.fillMaxSize().background(Palette.bg).testTag("home")
             .homeSwipes(onUp = onOpenDrawer, onDown = onShade),
@@ -233,7 +242,7 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
             // Learning words live here from Stage 2 (HomeWords.kt).
             HomeWordLayer(Modifier.fillMaxSize(), onLaunch = onLaunch)
         }
-        WidgetStrip()
+        WidgetStrip(maxHeight = widgetCap)
         ContinueStrip(onLaunch = onLaunch)
         LlmAskStrip()
         Spacer(Modifier.height(4.dp))
@@ -334,6 +343,16 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
     // Collected so the row appears as soon as the app list lands.
     val entries by app.apps.apps.collectAsState()
     val byId = remember(entries) { entries.associateBy { it.id } }
+    // The gesture blocks below outlive compositions (pointerInput restarts
+    // only on its keys), so they read the row through these: a cell tapped
+    // or held after a move, or after the app list landed, acts on the pin
+    // it shows now (review 2026-11-14: a moved pin opened the old app).
+    val livePins by rememberUpdatedState(pins)
+    val liveById by rememberUpdatedState(byId)
+    val liveFolders by rememberUpdatedState(folders)
+    val launch by rememberUpdatedState(onLaunch)
+    val menu by rememberUpdatedState(onMenu)
+    val openFolder by rememberUpdatedState(onOpenFolder)
     BoxWithConstraints(Modifier.fillMaxWidth().padding(bottom = 6.dp).testTag("pins")) {
         val columns = dockColumns(maxWidth.value.toInt(), pins.size)
         // The first and last icons sit on the margins, as the strips above do.
@@ -347,19 +366,29 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
         val density = LocalDensity.current
         val cellW = with(density) { (totalWidth / columns).toPx() }
 
+        fun tap(index: Int) {
+            when (val target = PinTarget.at(livePins, index, liveById, liveFolders)) {
+                is PinTarget.AppPin -> launch(target.entry)
+                is PinTarget.ShortcutPin -> app.apps.startShortcut(
+                    target.pin.pkg, target.pin.shortcutId, app.apps.userForSerial(target.pin.user),
+                )
+                is PinTarget.FolderPin -> openFolder(target.folder)
+                is PinTarget.GoneApp, null -> Unit
+            }
+        }
+
         fun finishDrag() {
             val from = dragIndex ?: return
             val to = positions.entries.firstOrNull { (_, r) -> r.contains(dragPos) }?.key
             dragIndex = null
             when {
                 to == null -> Unit
-                to == from -> {
-                    val pin = pins.getOrNull(from) ?: return
-                    when (pin) {
-                        is Pin.App -> byId[pin.id]?.let { onMenu(MenuTarget.HomeApp(from, it)) }
-                        is Pin.Shortcut -> onMenu(MenuTarget.HomeShortcut(from, pin))
-                        is Pin.FolderRef -> folders[pin.folderId]?.let { onMenu(MenuTarget.HomeFolder(from, it)) }
-                    }
+                to == from -> when (val target = PinTarget.at(livePins, from, liveById, liveFolders)) {
+                    is PinTarget.AppPin -> menu(MenuTarget.HomeApp(from, target.entry))
+                    is PinTarget.ShortcutPin -> menu(MenuTarget.HomeShortcut(from, target.pin))
+                    is PinTarget.FolderPin -> menu(MenuTarget.HomeFolder(from, target.folder))
+                    is PinTarget.GoneApp -> menu(MenuTarget.HomeGone(from, target.pin))
+                    null -> Unit
                 }
                 else -> {
                     // The middle half of the cell makes a folder; the rest moves it.
@@ -379,18 +408,10 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
                                 Modifier.width(totalWidth / columns)
                                     .onGloballyPositioned { positions[index] = it.boundsInRoot() }
                                     .alpha(if (dragIndex == index) 0.35f else 1f)
-                                    .pointerInput(index, pins.size) {
-                                        detectTapGestures(onTap = {
-                                            when (pin) {
-                                                is Pin.App -> byId[pin.id]?.let(onLaunch)
-                                                is Pin.Shortcut -> app.apps.startShortcut(
-                                                    pin.pkg, pin.shortcutId, app.apps.userForSerial(pin.user),
-                                                )
-                                                is Pin.FolderRef -> folders[pin.folderId]?.let(onOpenFolder)
-                                            }
-                                        })
+                                    .pointerInput(index) {
+                                        detectTapGestures(onTap = { tap(index) })
                                     }
-                                    .pointerInput(index, pins.size) {
+                                    .pointerInput(index) {
                                         detectDragGesturesAfterLongPress(
                                             onDragStart = { local ->
                                                 val rect = positions[index] ?: Rect.Zero

@@ -10,9 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -21,12 +18,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 
 /**
@@ -98,19 +95,30 @@ object Widgets {
     fun stopListening(ctx: Context) = runCatching { host?.stopListening() }
 }
 
-/** The hosted widgets, over the pinned row. A hold takes one off. */
-@Composable fun WidgetStrip() {
+/**
+ * The hosted widgets, over the pinned row, together never taller than
+ * [maxHeight] (the dock stays on screen). A hold takes one off.
+ */
+@Composable fun WidgetStrip(maxHeight: Dp) {
     val app = App.instance
     val ctx = LocalContext.current
     val layout by app.layout.data.collectAsState()
     var removing by remember { mutableStateOf<WidgetEntry?>(null) }
     if (layout.widgets.isEmpty()) return
+    val density = LocalDensity.current.density
+    val infos = remember(layout.widgets) { layout.widgets.map { Widgets.info(ctx, it) } }
+    val shown = layout.widgets.zip(infos).filter { it.second != null }
+    // Each widget's 4 dp of padding above and below counts toward the cap.
+    val heights = Sizes.widgetHeights(
+        shown.map { it.second!!.minHeight }, density,
+        (maxHeight.value - 8f * shown.size).coerceAtLeast(0f),
+    )
     Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp).testTag("widgets")) {
-        for (entry in layout.widgets) {
+        for ((i, pair) in shown.withIndex()) {
+            val (entry, info) = pair
             key(entry.appWidgetId) {
-                val info = remember(entry.appWidgetId) { Widgets.info(ctx, entry) }
                 if (info != null) {
-                    val h = info.minHeight.coerceIn(72, 220)
+                    val h = heights[i] + 8f
                     AndroidView(
                         factory = { c ->
                             Widgets.host(c).createView(c, entry.appWidgetId, info)
@@ -126,19 +134,14 @@ object Widgets {
         }
     }
     removing?.let { entry ->
-        AlertDialog(
-            onDismissRequest = { removing = null },
-            containerColor = Color(0xFF101010),
-            title = { Text("Widget", color = Palette.fg, fontSize = 17.sp) },
-            text = { Text(entry.pkg, color = Palette.dim, fontSize = 14.sp) },
-            confirmButton = {
-                TextButton(onClick = { Widgets.remove(ctx, entry); removing = null }) {
-                    Text("Remove", color = Palette.accent)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { removing = null }) { Text("Close", color = Palette.dim) }
-            },
-        )
+        // Titled with the widget's own name, as the app menus are.
+        val title = remember(entry.appWidgetId) {
+            Widgets.info(ctx, entry)?.loadLabel(ctx.packageManager)
+                ?: runCatching { ctx.packageManager.getApplicationLabel(ctx.packageManager.getApplicationInfo(entry.pkg, 0)).toString() }
+                    .getOrDefault(entry.pkg)
+        }
+        MenuSurface(onDismiss = { removing = null }, title = title, modifier = Modifier.testTag("widget-menu")) {
+            MenuRow("Remove", "widget-remove") { Widgets.remove(ctx, entry); removing = null }
+        }
     }
 }

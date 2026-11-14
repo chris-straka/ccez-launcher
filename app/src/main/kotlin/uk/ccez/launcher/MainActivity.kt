@@ -326,9 +326,7 @@ class MainActivity : FragmentActivity() {
             is MenuAction.PinApp -> app.layout.update { d ->
                 if (d.pins.none { (it as? Pin.App)?.id == action.entry.id }) d.pins.add(Pin.App(action.entry.id))
             }
-            is MenuAction.Unpin -> app.layout.update { d ->
-                if (action.index in d.pins.indices) d.pins.removeAt(action.index)
-            }
+            is MenuAction.Unpin -> app.layout.update { d -> LayoutOps.unpinShown(d, action.index, action.pin) }
             is MenuAction.Hide -> app.layout.update { d ->
                 d.hidden.add(action.entry.key)
                 d.pins.removeAll { (it as? Pin.App)?.id == action.entry.id }
@@ -356,7 +354,8 @@ class MainActivity : FragmentActivity() {
                 val si = action.shortcut
                 app.apps.pinShortcut(action.entry.id.pkg, si.id, action.entry.user)
                 app.layout.update { d ->
-                    d.pins.add(
+                    LayoutOps.addShortcutOnce(
+                        d,
                         Pin.Shortcut(
                             action.entry.id.pkg, si.id, action.entry.id.user,
                             si.shortLabel?.toString().orEmpty(),
@@ -376,10 +375,7 @@ class MainActivity : FragmentActivity() {
                 LayoutOps.tidyFolders(d)
             }
             is MenuAction.DissolveFolder -> app.layout.update { d ->
-                val ref = d.pins.getOrNull(action.index) as? Pin.FolderRef ?: return@update
-                val items = d.folders.remove(ref.folderId)?.items.orEmpty()
-                d.pins.removeAt(action.index)
-                d.pins.addAll(action.index, items)
+                d.folders[action.folderId]?.let { LayoutOps.unfolder(d, it) }
             }
             is MenuAction.RenameFolder -> app.layout.update { d ->
                 d.folders[action.folder.id]?.name = action.name

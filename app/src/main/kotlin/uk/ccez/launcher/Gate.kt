@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -96,7 +97,12 @@ fun MainActivity.tryGateWord(entry: AppEntry): Boolean {
 
     BackHandler { gateWord = null }
     Box(
-        Modifier.fillMaxSize().background(Palette.bg).testTag("gate"),
+        Modifier.fillMaxSize().background(Palette.bg)
+            // The gate covers home: a touch anywhere on it stays here (a
+            // tap or swipe between the buttons fell through to the pins and
+            // the drawer under it, review 2026-11-14).
+            .pointerInput(Unit) { detectTapGestures { } }
+            .testTag("gate"),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -110,7 +116,8 @@ fun MainActivity.tryGateWord(entry: AppEntry): Boolean {
                 modifier = Modifier.clickable { open(null) }
                     .semantics { contentDescription = "Open ${gate.entry.label}" }
                     .testTag("gate-open")
-                    .padding(8.dp),
+                    .heightIn(min = 48.dp)
+                    .padding(horizontal = 12.dp, vertical = 14.dp),
             )
             Spacer(Modifier.height(30.dp))
             Column(

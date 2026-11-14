@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -117,8 +118,12 @@ private fun spotFor(word: ScreenWord, up: List<UpWord>, a: Area): Pair<Float, Fl
     val density = LocalDensity.current
     var area by remember { mutableStateOf(Area(411f, 450f, 1f)) }
 
-    LaunchedEffect(settingsTick) {
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(settingsTick, lifecycle) {
         WordSync.maybe(ctx)
+        // Only while home is in front: in the background the loop kept
+        // fetching words that came and went unseen (review 2026-11-14).
+        lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
         while (true) {
             val count = app.settings.number("words.count")
             val now = System.currentTimeMillis()
@@ -140,6 +145,7 @@ private fun spotFor(word: ScreenWord, up: List<UpWord>, a: Area): Pair<Float, Fl
             }
             if (count <= 0) up.value = emptyList()
             delay(TICK_MS)
+        }
         }
     }
 

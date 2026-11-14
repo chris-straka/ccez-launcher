@@ -371,7 +371,7 @@ import androidx.fragment.app.FragmentActivity
         modifier.clip(RoundedCornerShape(Look.radius))
             .border(1.dp, Palette.line, RoundedCornerShape(Look.radius))
             .clickable(onClick = onClick)
-            .heightIn(min = 44.dp)
+            .heightIn(min = 48.dp)
             .padding(horizontal = 20.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
