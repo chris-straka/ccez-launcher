@@ -132,28 +132,79 @@ import uk.ccez.keys.core.WordStatus
     }
 }
 
-/** Carry on in ccez-tube: it resumes at its own place. Only when installed. */
-@Composable fun TubeStrip(onLaunch: (AppEntry) -> Unit) {
+/**
+ * Carry on in the app used last (owner, 2026-11-14: it only ever offered
+ * ccez-tube): Android's usage record when the launcher may read it
+ * (`appops set uk.ccez.launcher GET_USAGE_STATS allow`), else the last app
+ * opened from here. Read again each time home comes back.
+ */
+@Composable fun ContinueStrip(onLaunch: (AppEntry) -> Unit) {
     val app = App.instance
+    val ctx = LocalContext.current
     val apps by app.apps.apps.collectAsState()
-    val tube = apps.firstOrNull { it.id.pkg == "uk.ccez.tube" && !it.otherProfile } ?: return
+    var tick by remember { mutableIntStateOf(0) }
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) tick++ }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+    val last by produceState<AppEntry?>(null, apps, tick) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { LastApp.find(ctx, apps) }
+    }
+    val entry = last ?: return
     Row(
         Modifier.fillMaxWidth().padding(horizontal = Look.margin, vertical = 4.dp)
             .clip(RoundedCornerShape(Look.radius)).background(Palette.cell)
-            .clickable { onLaunch(tube) }
+            .clickable { onLaunch(entry) }
             .heightIn(min = Look.field)
             .padding(horizontal = Look.inset, vertical = 10.dp)
-            .testTag("tube-strip"),
+            .testTag("continue-strip"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        AppIconImage(tube, Modifier.size(26.dp))
+        AppIconImage(entry, Modifier.size(26.dp))
         Text(
-            AppNames.nameFor(tube), color = Palette.fg, fontSize = 15.sp,
+            AppNames.nameFor(entry), color = Palette.fg, fontSize = 15.sp,
             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
         )
         Text("Continue", color = Palette.dim, fontSize = Look.smallSize)
     }
+}
+
+/** The app used last, among the launchable ones (never this launcher or the keyboard). */
+object LastApp {
+    private val skip = setOf("uk.ccez.launcher", "uk.ccez.keys", "com.android.systemui")
+
+    fun remember(ctx: android.content.Context, pkg: String) {
+        ctx.getSharedPreferences("continue", android.content.Context.MODE_PRIVATE).edit().putString("last", pkg).apply()
+    }
+
+    fun find(ctx: android.content.Context, apps: List<AppEntry>): AppEntry? {
+        val mine = apps.filter { !it.otherProfile && it.id.pkg !in skip }
+        val byPkg = mine.associateBy { it.id.pkg }
+        used(ctx)?.let { pkg -> byPkg[pkg]?.let { return it } }
+        val opened = ctx.getSharedPreferences("continue", android.content.Context.MODE_PRIVATE).getString("last", null)
+        return opened?.let { byPkg[it] } ?: byPkg["uk.ccez.tube"]
+    }
+
+    /** The last app brought to the front in the past three days, from Android's usage record; null without access. */
+    private fun used(ctx: android.content.Context): String? = runCatching {
+        val ops = ctx.getSystemService(android.app.AppOpsManager::class.java)
+        val mode = ops.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), ctx.packageName)
+        if (mode != android.app.AppOpsManager.MODE_ALLOWED) return null
+        val usm = ctx.getSystemService(android.app.usage.UsageStatsManager::class.java)
+        val now = System.currentTimeMillis()
+        val events = usm.queryEvents(now - 3 * 24 * 3600_000L, now)
+        val e = android.app.usage.UsageEvents.Event()
+        val home = ctx.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0)?.activityInfo?.packageName
+        var last: String? = null
+        while (events.hasNextEvent()) {
+            events.getNextEvent(e)
+            if (e.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED && e.packageName !in skip && e.packageName != home) last = e.packageName
+        }
+        last
+    }.getOrNull()
 }
 
 /** Ask ccez-llm, through its `ccez-llm://send?text=` deep link. */

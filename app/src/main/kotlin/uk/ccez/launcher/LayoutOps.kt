@@ -145,7 +145,7 @@ object LayoutOps {
         is Spot.InFolder -> {
             val f = d.folders.getValue(spot.folderId)
             val p = f.items.removeAt(spot.index)
-            dropEmptyFolders(d)
+            tidyFolders(d)
             p
         }
     }
@@ -226,6 +226,49 @@ object LayoutOps {
         if (on) d.gates.add(key) else d.gates.remove(key)
 
     /** A folder with nothing left goes, and its place in the row. */
+    /**
+     * Empty folders go, and a folder down to one item becomes that item in
+     * its row place (owner, 2026-11-14: a one-app folder still acted as a
+     * folder).
+     */
+    fun tidyFolders(d: LayoutData) {
+        dropEmptyFolders(d)
+        for (f in d.folders.values.filter { it.items.size == 1 }) {
+            d.folders.remove(f.id)
+            val at = d.pins.indexOfFirst { (it as? Pin.FolderRef)?.folderId == f.id }
+            if (at >= 0) d.pins[at] = f.items[0]
+        }
+    }
+
+    /**
+     * A lifted pin dropped on [to]'s cell: in its middle, they make (or
+     * join) a folder; near its edges, the pin moves there, before the cell
+     * or ([after]) after it (owner, 2026-11-14: apps couldn't be moved).
+     */
+    fun drop(d: LayoutData, from: Int, to: Int, middle: Boolean, after: Boolean) {
+        if (from == to || from !in d.pins.indices || to !in d.pins.indices) return
+        if (!middle || d.pins[from] is Pin.FolderRef) {
+            val p = d.pins.removeAt(from)
+            var at = to + if (after) 1 else 0
+            if (from < at) at -= 1
+            d.pins.add(at.coerceIn(0, d.pins.size), p)
+            return
+        }
+        val dragged = d.pins[from]
+        val target = d.pins[to]
+        if (target is Pin.FolderRef) {
+            d.pins.removeAt(from)
+            d.folders[target.folderId]?.items?.add(dragged)
+            return
+        }
+        val id = "f${d.nextFolder}"
+        d.nextFolder += 1
+        d.folders[id] = Folder(id, "", mutableListOf(target, dragged))
+        val at = minOf(from, to)
+        for (i in listOf(from, to).sortedDescending()) d.pins.removeAt(i)
+        d.pins.add(at.coerceIn(0, d.pins.size), Pin.FolderRef(id))
+    }
+
     fun dropEmptyFolders(d: LayoutData) {
         val empty = d.folders.values.filter { it.items.isEmpty() }.map { it.id }.toSet()
         if (empty.isEmpty()) return

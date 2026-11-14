@@ -333,6 +333,7 @@ class MainActivity : FragmentActivity() {
                 d.hidden.add(action.entry.key)
                 d.pins.removeAll { (it as? Pin.App)?.id == action.entry.id }
                 d.folders.values.forEach { f -> f.items.removeAll { (it as? Pin.App)?.id == action.entry.id } }
+                LayoutOps.tidyFolders(d)
             }
             is MenuAction.Unhide -> app.layout.update { it.hidden.remove(action.entry.key) }
             is MenuAction.Info -> runCatching {
@@ -372,10 +373,7 @@ class MainActivity : FragmentActivity() {
                     val pin = f.items.removeAt(action.index)
                     d.pins.add(pin)
                 }
-                if (f.items.isEmpty()) {
-                    d.folders.remove(action.folderId)
-                    d.pins.removeAll { (it as? Pin.FolderRef)?.folderId == action.folderId }
-                }
+                LayoutOps.tidyFolders(d)
             }
             is MenuAction.DissolveFolder -> app.layout.update { d ->
                 val ref = d.pins.getOrNull(action.index) as? Pin.FolderRef ?: return@update

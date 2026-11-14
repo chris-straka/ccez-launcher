@@ -160,6 +160,7 @@ class AppRepository(private val ctx: Context, private val scope: CoroutineScope,
 
     fun launch(entry: AppEntry) {
         log.log("info", "launch", "pkg" to entry.id.pkg, "user" to entry.id.user)
+        LastApp.remember(App.instance, entry.id.pkg)
         runCatching {
             val cn = ComponentName(entry.id.pkg, entry.id.cls)
             val opts = ActivityOptions.makeBasic().toBundle()

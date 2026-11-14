@@ -103,12 +103,9 @@ class LayoutOpsTest {
         val spot = LayoutOps.locate(d, "clock", labelOf, inFolders = true)
         assertTrue(spot is Spot.InFolder)
         LayoutOps.unpin(d, spot)
-        val f = d.folders.values.single()
-        assertEquals(listOf<Pin>(Pin.App(calendar.id)), f.items)
-        // The last one out takes the folder with it.
-        LayoutOps.unpin(d, LayoutOps.locate(d, "calendar", labelOf, inFolders = true))
+        // Down to one app, the folder becomes that app in its place.
         assertTrue(d.folders.isEmpty())
-        assertEquals(listOf("Camera"), names(d))
+        assertEquals(listOf("Camera", "Calendar"), names(d))
     }
 
     @Test fun hideTakesTheAppOffHomeEverywhere() {
@@ -192,5 +189,28 @@ class LayoutOpsTest {
         assertEquals(Spot.Row(0), LayoutOps.locate(d, "new tab", labelOf))
         assertEquals(Spot.Row(0), LayoutOps.locate(d, "new-tab", labelOf))
         assertTrue(refused { LayoutOps.pinShortcut(d, s) }.contains("already pinned"))
+    }
+
+    @Test fun aPinDroppedNearACellsEdgeMovesThereAndInItsMiddleMakesAFolder() {
+        val d = LayoutData()
+        listOf(chrome, camera, calendar, clock).forEach { d.pins.add(Pin.App(it.id)) }
+        LayoutOps.drop(d, 0, 2, middle = false, after = true) // chrome after calendar
+        assertEquals(listOf(camera, calendar, chrome, clock).map { it.id }, d.pins.map { (it as Pin.App).id })
+        LayoutOps.drop(d, 3, 0, middle = false, after = false) // clock first
+        assertEquals(listOf(clock, camera, calendar, chrome).map { it.id }, d.pins.map { (it as Pin.App).id })
+        LayoutOps.drop(d, 1, 2, middle = true, after = false) // camera onto calendar: a folder
+        assertEquals(3, d.pins.size)
+        assertTrue(d.pins[1] is Pin.FolderRef)
+    }
+
+    @Test fun aFolderDownToOneAppBecomesThatApp() {
+        val d = LayoutData()
+        listOf(chrome, camera, calendar).forEach { d.pins.add(Pin.App(it.id)) }
+        LayoutOps.drop(d, 1, 2, middle = true, after = false)
+        val id = (d.pins[1] as Pin.FolderRef).folderId
+        d.folders.getValue(id).items.removeAt(0)
+        LayoutOps.tidyFolders(d)
+        assertTrue(d.folders.isEmpty())
+        assertEquals(listOf(chrome, camera).map { it.id }, d.pins.map { (it as Pin.App).id })
     }
 }

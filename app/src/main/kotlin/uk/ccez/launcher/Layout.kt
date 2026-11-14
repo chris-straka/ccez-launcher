@@ -145,7 +145,8 @@ class LayoutStore(dir: File, private val log: LauncherLog) {
             return LayoutData()
         }
         return try {
-            LayoutData.parse(file.readText())
+            // One-app folders left by older builds become their app.
+            LayoutData.parse(file.readText()).also { LayoutOps.tidyFolders(it) }
         } catch (e: Exception) {
             log.log("error", "layout-bad-file", "error" to e.toString())
             runCatching { file.renameTo(File(file.parentFile, "layout.json.bad")) }

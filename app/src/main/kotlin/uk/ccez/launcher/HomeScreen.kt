@@ -71,32 +71,9 @@ fun dockColumns(widthDp: Int, pins: Int): Int {
     return if (pins == base + 1 && widthDp / pins >= 64) pins else base
 }
 
-/** A long-press lift dropped on a cell: folder, join, or reorder. */
-fun pinDrop(store: LayoutStore, from: Int, to: Int) {
-    if (from == to) return
-    store.update { d ->
-        if (from !in d.pins.indices || to !in d.pins.indices) return@update
-        val dragged = d.pins[from]
-        val target = d.pins[to]
-        when {
-            dragged is Pin.FolderRef -> {
-                d.pins.removeAt(from)
-                d.pins.add(to.coerceIn(0, d.pins.size), dragged)
-            }
-            target is Pin.FolderRef -> {
-                d.pins.removeAt(from)
-                d.folders[target.folderId]?.items?.add(dragged)
-            }
-            else -> {
-                val id = "f${d.nextFolder}"
-                d.nextFolder += 1
-                d.folders[id] = Folder(id, "", mutableListOf(target, dragged))
-                val at = minOf(from, to)
-                for (i in listOf(from, to).sortedDescending()) d.pins.removeAt(i)
-                d.pins.add(at.coerceIn(0, d.pins.size), Pin.FolderRef(id))
-            }
-        }
-    }
+/** A long-press lift dropped on a cell: folder or join in its middle, a move near its edges (LayoutOps.drop). */
+fun pinDrop(store: LayoutStore, from: Int, to: Int, middle: Boolean = true, after: Boolean = false) {
+    store.update { d -> LayoutOps.drop(d, from, to, middle, after) }
 }
 
 /**
@@ -257,7 +234,7 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
             HomeWordLayer(Modifier.fillMaxSize(), onLaunch = onLaunch)
         }
         WidgetStrip()
-        TubeStrip(onLaunch = onLaunch)
+        ContinueStrip(onLaunch = onLaunch)
         LlmAskStrip()
         Spacer(Modifier.height(4.dp))
         PinnedGrid(
@@ -384,7 +361,12 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
                         is Pin.FolderRef -> folders[pin.folderId]?.let { onMenu(MenuTarget.HomeFolder(from, it)) }
                     }
                 }
-                else -> pinDrop(app.layout, from, to)
+                else -> {
+                    // The middle half of the cell makes a folder; the rest moves it.
+                    val r = positions[to] ?: return
+                    val middle = kotlin.math.abs(dragPos.x - r.center.x) < r.width / 4 && kotlin.math.abs(dragPos.y - r.center.y) < r.height / 4
+                    pinDrop(app.layout, from, to, middle, after = dragPos.x > r.center.x)
+                }
             }
         }
 
