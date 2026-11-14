@@ -8,6 +8,6 @@ An Android home screen built around learning languages (see `PLAN.md`).
   built read-only from the sibling checkout; nothing word-shaped is
   re-written in Kotlin.
 - Agents run it over adb: `bun scripts/launcher.ts status|get|set|log|dump|backup|restore`.
-- Build and release locally (private repo, no Actions):
+- Build and release locally (public repo since 2026-11-12, no Actions):
   `scripts/build.sh`, `scripts/release.sh`. Gates: `scripts/check.sh`
   (needs `LAUNCHER_SERIAL`).

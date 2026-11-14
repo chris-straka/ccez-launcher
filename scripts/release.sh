@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A release on GitHub (private repo, built locally: no Actions): the
+# A release on GitHub (public repo, built locally: no Actions): the
 # signed APK and its SHA-256 (the launcher finds it there and installs
 # it itself when updates.self is on, Updater.kt). Quality gates first:
 # unit tests always; with LAUNCHER_SERIAL set, the perf gate too
@@ -8,6 +8,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 [ -z "$(git status --porcelain)" ] || { echo "commit first" >&2; exit 1; }
+# The word core is built from the ccez-keys checkout (app/build.gradle.kts):
+# a release ships only committed core code, and says which commit.
+KEYS="${CCEZ_KEYS_DIR:-../ccez-keys}"
+[ -z "$(git -C "$KEYS" status --porcelain -- core)" ] || { echo "$KEYS/core has uncommitted changes: commit them there, or point CCEZ_KEYS_DIR at a clean checkout" >&2; exit 1; }
+CORE="$(git -C "$KEYS" rev-parse --short HEAD)"
 ./gradlew --console=plain -q :app:testDebugUnitTest
 if [ -n "${LAUNCHER_SERIAL:-}" ]; then
   scripts/perf.sh
@@ -24,5 +29,5 @@ if gh release view "$TAG" >/dev/null 2>&1; then echo "$TAG is released: commit s
 git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || git tag "$TAG"
 git push -q origin "$TAG"
 gh release create "$TAG" "$OUT/ccez-launcher-$TAG.apk" "$OUT/ccez-launcher-$TAG.apk.sha256" \
-  --title "ccez-launcher $TAG" --notes "$(git log -1 --format=%s)" --latest
+  --title "ccez-launcher $TAG" --notes "$(git log -1 --format=%s) (ccez-keys core $CORE)" --latest
 echo "released $TAG"

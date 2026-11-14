@@ -83,7 +83,10 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            // Without the key (scripts/build.sh sets it) the release APK is
+            // left unsigned (app-release-unsigned.apk), never quietly signed
+            // with the debug key: that one can't install over the owner's.
+            signingConfig = signingConfigs.findByName("release")
         }
         // Macrobenchmark measures this: like release, debuggable off.
         create("benchmark") {
