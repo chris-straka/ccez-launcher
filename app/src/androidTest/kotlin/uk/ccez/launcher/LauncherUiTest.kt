@@ -84,9 +84,15 @@ class LauncherUiTest {
     }
 
     @Test fun holdingOnePinOnAnotherMakesAFolder() {
-        // Two app pins on home (seeded on first run).
+        // Two app pins on home: seeded on first run, made here when not
+        // (a skipped test passed for a run that checked nothing).
+        if (App.instance.layout.data.value.pins.filterIsInstance<Pin.App>().size < 2) {
+            val two = App.instance.apps.apps.value.filter { !it.otherProfile }.take(2)
+            org.junit.Assert.assertEquals("two apps installed", 2, two.size)
+            App.instance.layout.update { d -> two.forEach { e -> d.pins.add(Pin.App(e.id)) } }
+            rule.waitForIdle()
+        }
         val before = App.instance.layout.data.value.pins.filterIsInstance<Pin.App>()
-        org.junit.Assume.assumeTrue("needs two seeded pins", before.size >= 2)
         val origin = rule.onNodeWithTag("pins").fetchSemanticsNode().boundsInRoot.topLeft
         val first = rule.onNodeWithTag("app:${before[0].id.key()}").fetchSemanticsNode().boundsInRoot.center - origin
         val second = rule.onNodeWithTag("app:${before[1].id.key()}").fetchSemanticsNode().boundsInRoot.center - origin
