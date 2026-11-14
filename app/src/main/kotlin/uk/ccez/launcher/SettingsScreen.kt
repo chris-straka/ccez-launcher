@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -43,7 +44,6 @@ import androidx.compose.ui.unit.sp
     val ctx = LocalContext.current
     val tick by app.settings.version.collectAsState()
     val isHome = remember(tick) { app.apps.isDefaultHome() }
-    val lockOn = remember(tick) { app.settings.bool("gestures.double_tap_lock") }
     val lockReady = remember(tick) { LockService.enabled(ctx) }
 
     Column(Modifier.fillMaxSize().background(Palette.bg).testTag("settings")) {
@@ -51,8 +51,8 @@ import androidx.compose.ui.unit.sp
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onBack) { Text("‹ Home", color = Palette.accent, fontSize = 16.sp) }
-            Text("Settings", color = Palette.fg, fontSize = 20.sp)
+            IconAction(LauncherIcons.Back, "Home", Modifier.testTag("settings-back"), tint = Palette.fg, onClick = onBack)
+            Text("Settings", color = Palette.fg, fontSize = 20.sp, modifier = Modifier.padding(start = 4.dp))
         }
         LazyColumn(Modifier.fillMaxSize()) {
             item {
@@ -67,12 +67,8 @@ import androidx.compose.ui.unit.sp
             }
             item {
                 SettingAction(
-                    "Double-tap lock service",
-                    when {
-                        !lockOn -> "Off in the switch above"
-                        lockReady -> "On"
-                        else -> "Needs turning on"
-                    },
+                    "Lock service",
+                    if (lockReady) "On" else "Off",
                     "setting-lock-service",
                 ) {
                     runCatching {
@@ -122,16 +118,24 @@ import androidx.compose.ui.unit.sp
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("setting:${def.key}"),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(prettyKey(def.key), color = Palette.fg, fontSize = 16.sp)
-            Text(def.about, color = Palette.dim, fontSize = 12.sp, lineHeight = 15.sp)
+            Text(def.label, color = Palette.fg, fontSize = 16.sp)
+            // Saved on Done and when the field loses focus (backing out
+            // of it dropped the edit, review 2026-11-14).
+            fun save() {
+                val v = text.trim()
+                if (v == app.settings.get(def.key)) return
+                runCatching { app.settings.set(def.key, org.json.JSONObject.quote(v)); app.settingsChanged() }
+            }
+            var focused by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
             androidx.compose.material3.OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = {
-                    runCatching { app.settings.set(def.key, org.json.JSONObject.quote(text.trim())); app.settingsChanged() }
-                }),
+                modifier = Modifier.fillMaxWidth().onFocusChanged {
+                    if (focused && !it.isFocused) save()
+                    focused = it.isFocused
+                },
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { save() }),
                 colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Palette.fg,
                     unfocusedTextColor = Palette.fg,
@@ -148,10 +152,7 @@ import androidx.compose.ui.unit.sp
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(prettyKey(def.key), color = Palette.fg, fontSize = 16.sp)
-            Text(def.about, color = Palette.dim, fontSize = 12.sp, lineHeight = 15.sp)
-        }
+        Text(def.label, color = Palette.fg, fontSize = 16.sp, modifier = Modifier.weight(1f))
         when (val k = def.kind) {
             SettingDefs.Kind.Bool -> {
                 val v = remember(tick, def.key) { app.settings.bool(def.key) }
@@ -182,10 +183,6 @@ import androidx.compose.ui.unit.sp
         }
     }
 }
-
-/** `words.count` reads "Words count" (sentence case, few words). */
-private fun prettyKey(key: String): String =
-    key.replace('.', ' ').replace('_', ' ').replaceFirstChar { it.uppercase() }
 
 /** The ROLE_HOME ask, or the settings page on old Android. */
 fun requestHomeRole(ctx: Context) {

@@ -19,20 +19,25 @@ object SettingDefs {
         data object Text : Kind()
     }
 
-    data class Def(val key: String, val kind: Kind, val default: Any, val about: String)
+    /**
+     * [label] is what the settings screen shows: a few words, no helper
+     * line under it (owner's rule). [about] is for agents only (`launcher
+     * schema`).
+     */
+    data class Def(val key: String, val kind: Kind, val default: Any, val label: String, val about: String)
 
     val ALL: List<Def> = listOf(
-        Def("home.clock", Kind.Bool, true, "The clock and date on home."),
-        Def("search.contacts", Kind.Bool, true, "Search finds people too (needs the contacts permission)."),
-        Def("hidden.biometric", Kind.Bool, false, "The hidden space asks for a fingerprint first."),
-        Def("gestures.notifications", Kind.Bool, true, "Swipe down on home pulls the notifications down."),
-        Def("gestures.double_tap_lock", Kind.Bool, false, "Double-tap on home locks (needs the accessibility service on)."),
-        Def("words.count", Kind.IntRange(0, 12), 4, "Learning words on home (0: off). Mirrors the core's learning.screen."),
-        Def("words.langs", Kind.IntRange(0, 24), 0, "How many learning languages home words come from (0: all)."),
-        Def("words.app_name_langs", Kind.Bool, false, "App names in the learning languages (Stage 5)."),
-        Def("words.clock_lang", Kind.Bool, false, "The clock written out in a learning language (Stage 5)."),
-        Def("updates.self", Kind.Bool, false, "The launcher installs releases itself from GitHub."),
-        Def("words.server", Kind.Text, "", "The ccez-words server, shared with the keyboard. Empty: words stay on the phone."),
+        Def("home.clock", Kind.Bool, true, "Clock", "The clock and date on home."),
+        Def("search.contacts", Kind.Bool, true, "Search contacts", "Search finds people too (needs the contacts permission)."),
+        Def("hidden.biometric", Kind.Bool, false, "Fingerprint for hidden apps", "The hidden space asks for a fingerprint first."),
+        Def("gestures.notifications", Kind.Bool, true, "Swipe down for notifications", "Swipe down on home pulls the notifications down."),
+        Def("gestures.double_tap_lock", Kind.Bool, false, "Double-tap to lock", "Double-tap on home locks (needs the accessibility service on)."),
+        Def("words.count", Kind.IntRange(0, 12), 4, "Words on home", "Learning words on home (0: off). Mirrors the core's learning.screen."),
+        Def("words.langs", Kind.IntRange(0, 24), 0, "Word languages", "How many learning languages home words come from (0: all)."),
+        Def("words.app_name_langs", Kind.Bool, false, "Translated app names", "App names in the learning languages (Stage 5)."),
+        Def("words.clock_lang", Kind.Bool, false, "Clock in words", "The clock written out in a learning language (Stage 5)."),
+        Def("updates.self", Kind.Bool, false, "Self-update", "The launcher installs releases itself from GitHub."),
+        Def("words.server", Kind.Text, "", "Words server", "The ccez-words server, shared with the keyboard. Empty: words stay on the phone."),
     )
 
     fun def(key: String): Def? = ALL.firstOrNull { it.key == key }
@@ -78,6 +83,11 @@ object SettingDefs {
 
 class LauncherSettings(dir: File, private val log: LauncherLog) {
     private val file = File(dir, "settings.json")
+    /**
+     * Held here: a FileObserver nobody references is collected and stops
+     * watching. Declared before init, which sets it.
+     */
+    private var observer: android.os.FileObserver? = null
     private val values = HashMap<String, Any>()
 
     /** Bumped on every change, from the screen, `launcher set` or the file itself. */
@@ -157,6 +167,7 @@ class LauncherSettings(dir: File, private val log: LauncherLog) {
                 }
             }
             w.startWatching()
+            observer = w
         }
     }
 }
