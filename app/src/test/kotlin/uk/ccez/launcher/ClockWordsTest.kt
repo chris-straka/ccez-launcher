@@ -28,5 +28,63 @@ class ClockWordsTest {
         val langs = listOf("fr", "de", "es")
         assertTrue(LangOfDay.today(langs) in langs)
         assertEquals(null, LangOfDay.today(emptyList()))
+        // A new day, the next language (the clock picks it again at midnight).
+        val day = LocalDate.of(2026, 11, 16)
+        val next = langs[(langs.indexOf(LangOfDay.today(langs, day)) + 1) % langs.size]
+        assertEquals(next, LangOfDay.today(langs, day.plusDays(1)))
+    }
+
+    private fun at(h: Int, m: Int) = LocalDateTime.of(2026, 11, 16, h, m)
+
+    @Test fun frenchMidnightAndTheFirst() {
+        assertEquals("Il est minuit", ClockWords.time("fr", at(0, 0)))
+        assertEquals("Il est minuit douze", ClockWords.time("fr", at(0, 12)))
+        assertEquals("dimanche premier novembre", ClockWords.date("fr", LocalDate.of(2026, 11, 1)))
+    }
+
+    @Test fun germanOneOclockAndOrdinalDates() {
+        assertEquals("Es ist ein Uhr", ClockWords.time("de", at(1, 0)))
+        assertEquals("Es ist ein Uhr fünf", ClockWords.time("de", at(1, 5)))
+        assertEquals("Montag, der sechzehnte November", ClockWords.date("de", LocalDate.of(2026, 11, 16)))
+        assertEquals("Sonntag, der erste November", ClockWords.date("de", LocalDate.of(2026, 11, 1)))
+        assertEquals("Dienstag, der dritte November", ClockWords.date("de", LocalDate.of(2026, 11, 3)))
+        assertEquals("Samstag, der einundzwanzigste November", ClockWords.date("de", LocalDate.of(2026, 11, 21)))
+    }
+
+    @Test fun chineseTwoOclockAndZeroMinutes() {
+        assertEquals("两点", ClockWords.time("zh", at(2, 0)))
+        assertEquals("两点零五分", ClockWords.time("zh", at(2, 5)))
+        assertEquals("十四点二十分", ClockWords.time("zh", at(14, 20)))
+        assertEquals("零点", ClockWords.time("zh", at(0, 0)))
+        assertTrue(ClockWords.date("zh", LocalDate.of(2026, 2, 2)).startsWith("二月二日"))
+    }
+
+    @Test fun koreanNativeHoursAndMonths() {
+        assertEquals("오후 세 시", ClockWords.time("ko", at(15, 0)))
+        assertEquals("오전 한 시 오 분", ClockWords.time("ko", at(1, 5)))
+        assertEquals("오전 열두 시", ClockWords.time("ko", at(0, 0)))
+        assertEquals("오후 열두 시 삼십 분", ClockWords.time("ko", at(12, 30)))
+        assertTrue(ClockWords.date("ko", LocalDate.of(2026, 6, 6)).startsWith("유월 육일"))
+        assertTrue(ClockWords.date("ko", LocalDate.of(2026, 10, 10)).startsWith("시월 십일"))
+    }
+
+    @Test fun japaneseStays() {
+        assertEquals("二時", ClockWords.time("ja", at(2, 0)))
+        assertEquals("十一月十六日、月曜日", ClockWords.date("ja", LocalDate.of(2026, 11, 16)))
+    }
+
+    @Test fun spanishItalianPortugueseForms() {
+        assertEquals("dieciséis", ClockWords.spell("es", 16))
+        assertEquals("veintidós", ClockWords.spell("es", 22))
+        assertEquals("veintitrés", ClockWords.spell("es", 23))
+        assertEquals("veintiséis", ClockWords.spell("es", 26))
+        assertEquals("Es medianoche", ClockWords.time("es", at(0, 0)))
+        assertEquals("Son las veintiuna y diez", ClockWords.time("es", at(21, 10)))
+        assertEquals("lunes dieciséis de noviembre", ClockWords.date("es", LocalDate.of(2026, 11, 16)))
+        assertEquals("ventitré", ClockWords.spell("it", 23))
+        assertEquals("trentatré", ClockWords.spell("it", 33))
+        assertEquals("È mezzanotte", ClockWords.time("it", at(0, 0)))
+        assertEquals("São duas e cinco", ClockWords.time("pt", at(2, 5)))
+        assertTrue(ClockWords.date("pt", LocalDate.of(2026, 11, 1)).endsWith("primeiro de novembro"))
     }
 }

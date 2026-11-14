@@ -33,9 +33,9 @@ suspend fun <T> Task<T>.await(): T = suspendCancellableCoroutine { cont ->
 
 /** The learning language of the day: they take turns daily (Stage 5). */
 object LangOfDay {
-    fun today(langs: List<String>): String? {
+    fun today(langs: List<String>, day: LocalDate = LocalDate.now()): String? {
         if (langs.isEmpty()) return null
-        val i = (LocalDate.now().toEpochDay() % langs.size).toInt()
+        val i = Math.floorMod(day.toEpochDay(), langs.size.toLong()).toInt()
         return langs[i]
     }
 
@@ -121,12 +121,20 @@ object ClockWords {
             "diez", "once", "doce", "trece", "catorce", "quince",
         )
         if (n <= 15) return ones[n]
-        if (n < 20) return "dieci" + ones[n - 10].replace("siete", "siete")
+        if (n < 20) return "dieci" + accented(ones[n - 10])
         if (n == 20) return "veinte"
-        if (n < 30) return "veinti" + ones[n - 20]
+        if (n < 30) return "veinti" + accented(ones[n - 20])
         val tens = listOf("", "", "", "treinta", "cuarenta", "cincuenta")
         val r = n % 10
         return if (r == 0) tens[n / 10] else "${tens[n / 10]} y ${ones[r]}"
+    }
+
+    /** dieciséis, veintidós, veintitrés, veintiséis: the stress lands on a written accent. */
+    private fun accented(one: String): String = when (one) {
+        "dos" -> "dós"
+        "tres" -> "trés"
+        "seis" -> "séis"
+        else -> one
     }
 
     private fun spellPt(n: Int): String {
@@ -153,7 +161,8 @@ object ClockWords {
         if (r == 0) return tens[n / 10]
         val head = tens[n / 10]
         val base = if (r == 1 || r == 8) head.dropLast(1) else head
-        return base + ones[r]
+        // ventitré, trentatré: a final "tre" in a compound takes an accent.
+        return base + if (r == 3) "tré" else ones[r]
     }
 
     private fun spellCjk(n: Int, digits: String): String {
@@ -229,6 +238,31 @@ object ClockWords {
         return tens[n / 10] + if (r == 0) "" else ones[r]
     }
 
+    /** Hours are feminine in es and pt (las dos, as duas, vinte e uma). */
+    private fun feminineHour(lang: String, h: Int): String {
+        val hs = spell(lang, h)
+        return when (lang) {
+            "es" -> if (h == 21) "veintiuna" else hs
+            "pt" -> when (h) {
+                2 -> "duas"
+                21 -> "vinte e uma"
+                22 -> "vinte e duas"
+                else -> hs
+            }
+            else -> hs
+        }
+    }
+
+    /** Korean clock hours are native numbers, on a 12-hour clock: 오후 세 시. */
+    private fun koHour(h: Int): String {
+        val native = listOf("열두", "한", "두", "세", "네", "다섯", "여섯", "일곱", "여덟", "아홉", "열", "열한")
+        val half = if (h < 12) "오전" else "오후"
+        return "$half ${native[h % 12]} 시"
+    }
+
+    /** Chinese says 两 for two of a thing, the hour included (两点). */
+    private fun zhHour(h: Int): String = if (h == 2) "两" else spell("zh", h)
+
     fun time(lang: String, time: LocalDateTime): String {
         val h = time.hour
         val m = time.minute
@@ -236,38 +270,85 @@ object ClockWords {
         val ms = if (m == 0) "" else spell(lang, m)
         val text = when (lang) {
             "fr" -> {
-                val hour = if (h == 1) "une heure" else "$hs heures"
+                val hour = when (h) {
+                    0 -> "minuit"
+                    1 -> "une heure"
+                    else -> "$hs heures"
+                }
                 if (m == 0) "Il est $hour" else "Il est $hour $ms"
             }
-            "de" -> if (m == 0) "Es ist $hs Uhr" else "Es ist $hs Uhr $ms"
+            "de" -> {
+                // "ein Uhr", never "eins Uhr".
+                val hour = if (h == 1) "ein" else hs
+                if (m == 0) "Es ist $hour Uhr" else "Es ist $hour Uhr $ms"
+            }
             "es" -> {
-                val base = if (h == 1) "Es la una" else "Son las $hs"
+                val base = when (h) {
+                    0 -> if (m == 0) "Es medianoche" else "Son las doce"
+                    1 -> "Es la una"
+                    else -> "Son las ${feminineHour(lang, h)}"
+                }
                 if (m == 0) base else "$base y $ms"
             }
             "it" -> {
-                val base = if (h == 1) "È l'una" else "Sono le $hs"
+                val base = when (h) {
+                    0 -> "È mezzanotte"
+                    1 -> "È l'una"
+                    else -> "Sono le $hs"
+                }
                 if (m == 0) base else "$base e $ms"
             }
             "pt" -> {
-                val base = if (h == 1) "É uma" else "São $hs"
+                val base = when (h) {
+                    0 -> "É meia-noite"
+                    1 -> "É uma"
+                    else -> "São ${feminineHour(lang, h)}"
+                }
                 if (m == 0) base else "$base e $ms"
             }
             "ja" -> if (m == 0) "${hs}時" else "${hs}時${ms}分"
-            "zh" -> if (m == 0) "${hs}点" else "${hs}点${ms}分"
-            "ko" -> if (m == 0) "${hs}시" else "${hs}시 ${ms}분"
+            "zh" -> {
+                val hour = zhHour(h)
+                // Minutes under ten keep a 零: 两点零五分.
+                if (m == 0) "${hour}点" else "${hour}点${if (m < 10) "零" else ""}${ms}分"
+            }
+            "ko" -> if (m == 0) koHour(h) else "${koHour(h)} $ms 분"
             else -> listOf(hs, ms).filter { it.isNotEmpty() }.joinToString(" ")
         }
         return text.replaceFirstChar { it.uppercase() }
+    }
+
+    /** German dates take the ordinal: der sechzehnte, der erste, der dritte. */
+    private fun deOrdinal(n: Int): String = when (n) {
+        1 -> "erste"
+        3 -> "dritte"
+        7 -> "siebte"
+        8 -> "achte"
+        else -> spell("de", n) + if (n < 20) "te" else "ste"
+    }
+
+    /** Korean months 6 and 10 drop a sound: 유월, 시월. */
+    private fun koMonth(m: Int): String = when (m) {
+        6 -> "유"
+        10 -> "시"
+        else -> spell("ko", m)
     }
 
     fun date(lang: String, day: LocalDate): String {
         val loc = Locale.forLanguageTag(lang)
         val weekday = day.format(DateTimeFormatter.ofPattern("EEEE", loc))
         val month = day.format(DateTimeFormatter.ofPattern("MMMM", loc))
-        val d = spell(lang, day.dayOfMonth)
+        val n = day.dayOfMonth
+        val d = spell(lang, n)
         return when (lang) {
-            "ja", "zh" -> "${spell(lang, day.monthValue)}月${d}日、$weekday"
-            "ko" -> "${spell(lang, day.monthValue)}월 ${d}일 $weekday"
+            "ja" -> "${spell(lang, day.monthValue)}月${d}日、$weekday"
+            "zh" -> "${spell(lang, day.monthValue)}月${d}日，$weekday"
+            "ko" -> "${koMonth(day.monthValue)}월 ${d}일 $weekday"
+            "de" -> "$weekday, der ${deOrdinal(n)} $month"
+            "fr" -> "$weekday ${if (n == 1) "premier" else d} $month"
+            "it" -> "$weekday ${if (n == 1) "primo" else d} $month"
+            "es" -> "$weekday $d de $month"
+            "pt" -> "$weekday, ${if (n == 1) "primeiro" else d} de $month"
             else -> "$weekday $d $month"
         }
     }
