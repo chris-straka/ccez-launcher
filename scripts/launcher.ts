@@ -108,9 +108,36 @@ function restore(file?: string): void {
   const s = serial();
   const data = file ? readFileSync(file) : readFileSync(0);
   JSON.parse(data.toString("utf8")); // not JSON at all: fail here, not on the phone
+  // The phone answers in its log (a "restore" line): note the last one
+  // before sending, then wait for a new one and say what it says.
+  const before = lastRestore();
   const out = spawnSync("adb", ["-s", s, "shell", `content write --uri ${URI}/restore`], { input: data });
   if (out.status !== 0) throw new Error(`restore failed: ${out.stderr?.toString() ?? ""}`);
-  console.log("sent; `launcher log` says how it went");
+  const until = Date.now() + 10_000;
+  while (Date.now() < until) {
+    const got = lastRestore();
+    if (got && got.t !== before?.t) {
+      if (got.level === "error") throw new Error(`restore refused on the phone: ${got.error ?? "no reason logged"}`);
+      console.log(got.result ?? "restored");
+      return;
+    }
+    Bun.sleepSync(300);
+  }
+  throw new Error("sent, but the phone logged no restore within 10 s (`launcher log` to look)");
+}
+
+/** The newest "restore" line in the launcher's log, if any. */
+function lastRestore(): Json | undefined {
+  const lines = call("log", "200").split("\n").filter((l) => l.includes('"restore"'));
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try {
+      const o = JSON.parse(lines[i]);
+      if (o.event === "restore") return o;
+    } catch {
+      // a partial line: skip it
+    }
+  }
+  return undefined;
 }
 
 // --- the layout (AgentCommands.kt) ---

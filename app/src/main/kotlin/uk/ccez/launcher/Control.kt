@@ -39,7 +39,7 @@ class Control : ContentProvider() {
             "/backup" -> {
                 Thread {
                     runCatching { android.os.ParcelFileDescriptor.AutoCloseOutputStream(write).use { it.write(Backup.export().toByteArray()) } }
-                        .onFailure { app.launcherLog.log("error", "backup", "error" to it.toString()) }
+                        .onFailure { app.launcherLog.log("error", "backup", "error" to it.toString(), "stack" to android.util.Log.getStackTraceString(it)) }
                 }.start()
                 return read
             }
@@ -48,7 +48,7 @@ class Control : ContentProvider() {
                     val text = runCatching { android.os.ParcelFileDescriptor.AutoCloseInputStream(read).use { it.readBytes().decodeToString() } }
                     val said = text.mapCatching { Backup.import(it) }
                     said.onSuccess { app.launcherLog.log("info", "restore", "result" to it) }
-                        .onFailure { app.launcherLog.log("error", "restore", "error" to it.toString()) }
+                        .onFailure { app.launcherLog.log("error", "restore", "error" to it.toString(), "stack" to android.util.Log.getStackTraceString(it)) }
                 }.start()
                 return write
             }
@@ -115,8 +115,14 @@ class Control : ContentProvider() {
             out.putString("out", b64(result))
         } catch (e: Exception) {
             // A refused agent command is said back and logged, not an app error.
-            val level = if (e is AgentError) "info" else "error"
-            app.launcherLog.log(level, "control", "method" to method, "error" to e.toString())
+            if (e is AgentError) {
+                app.launcherLog.log("info", "control", "method" to method, "error" to e.toString())
+            } else {
+                app.launcherLog.log(
+                    "error", "control", "method" to method, "error" to e.toString(),
+                    "stack" to android.util.Log.getStackTraceString(e),
+                )
+            }
             out.putString("error", b64(e.message ?: e.toString()))
         }
         return out
