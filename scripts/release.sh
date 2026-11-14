@@ -9,9 +9,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 [ -z "$(git status --porcelain)" ] || { echo "commit first" >&2; exit 1; }
 # The word core is built from the ccez-keys checkout (app/build.gradle.kts):
-# a release ships only committed core code, and says which commit.
+# a release ships only committed core code, and says which commit. The
+# build reads core/, the data it compiles in (include_str! of data/), and
+# the workspace's Cargo.toml (release profile) and Cargo.lock.
 KEYS="${CCEZ_KEYS_DIR:-../ccez-keys}"
-[ -z "$(git -C "$KEYS" status --porcelain -- core)" ] || { echo "$KEYS/core has uncommitted changes: commit them there, or point CCEZ_KEYS_DIR at a clean checkout" >&2; exit 1; }
+CORE_PATHS=(core data Cargo.toml Cargo.lock)
+DIRTY="$(git -C "$KEYS" status --porcelain -- "${CORE_PATHS[@]}")"
+[ -z "$DIRTY" ] || { printf '%s has uncommitted changes the core builds from: commit them there, or point CCEZ_KEYS_DIR at a clean checkout\n%s\n' "$KEYS" "$DIRTY" >&2; exit 1; }
 CORE="$(git -C "$KEYS" rev-parse --short HEAD)"
 ./gradlew --console=plain -q :app:testDebugUnitTest
 if [ -n "${LAUNCHER_SERIAL:-}" ]; then

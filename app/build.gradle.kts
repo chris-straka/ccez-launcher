@@ -13,7 +13,9 @@ val coreDir = System.getenv("CCEZ_KEYS_DIR")?.let { rootProject.layout.projectDi
     ?: rootProject.layout.projectDirectory.dir("../ccez-keys/core")
 val rustJniLibs = layout.buildDirectory.dir("rustJniLibs")
 val uniffiKotlin = layout.buildDirectory.dir("generated/uniffi")
-val coreInputs = listOf("src", "Cargo.toml", "uniffi.toml")
+// What the core build reads: its sources, the data it compiles in
+// (include_str! of ../data), and the workspace's release profile and lock.
+val coreInputs = listOf("src", "Cargo.toml", "uniffi.toml", "../data", "../Cargo.toml", "../Cargo.lock")
 // Processors to build for: the phone and the arm emulator (arm64-v8a).
 // CCEZ_LAUNCHER_ABIS=arm64-v8a,x86_64 adds an Intel emulator.
 val abis = (System.getenv("CCEZ_LAUNCHER_ABIS") ?: "arm64-v8a").split(',').map { it.trim() }.filter { it.isNotEmpty() }
