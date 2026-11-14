@@ -55,6 +55,7 @@ class LayoutTest {
                 d.pins.add(Pin.App(app2))
             }
             pinDrop(store, 1, 0)
+            store.flush()
             val d = store.data.value
             assertEquals(1, d.pins.size)
             val ref = d.pins[0] as Pin.FolderRef

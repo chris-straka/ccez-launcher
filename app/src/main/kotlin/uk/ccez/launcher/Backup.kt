@@ -34,7 +34,7 @@ object Backup {
         require(checked != null || layout != null) { "nothing to restore" }
         try {
             checked?.let { app.settings.replaceAll(it) }
-            layout?.let { app.layout.replace(it) }
+            layout?.let { app.layout.replace(it); app.layout.flush() }
         } catch (e: Exception) {
             throw WriteFailed(e)
         }

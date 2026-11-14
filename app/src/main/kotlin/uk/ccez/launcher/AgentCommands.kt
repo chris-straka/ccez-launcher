@@ -160,6 +160,8 @@ object AgentCommands {
             else -> throw AgentError("no command called $method")
         }
         if (method !in setOf("apps", "pins", "hidden", "shortcuts")) {
+            // On disk before the answer: an agent may stop the app next.
+            app.layout.flush()
             app.launcherLog.log("info", "agent", "cmd" to method, "result" to result)
         }
         return result

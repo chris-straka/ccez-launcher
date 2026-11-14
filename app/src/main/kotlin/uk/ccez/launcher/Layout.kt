@@ -189,19 +189,54 @@ class LayoutStore(dir: File, private val log: LauncherLog) {
         writeSafely(file, d.toJson())
     }
 
-    /** Every change goes through here: mutate a copy's lists, save, publish. */
+    // Saves run on their own thread: update() is called from a pin drop and
+    // the menus on the main thread, and a save is a read and two fsynced
+    // writes (review 2026-11-14). One thread keeps them in order; changes
+    // that come faster than the disk are written once, as the latest.
+    private val writer = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread(r, "layout-save").apply { isDaemon = true }
+    }
+    private val queued = Any()
+    private var pending: LayoutData? = null
+    @Volatile private var failed: Exception? = null
+
+    private fun queueSave(d: LayoutData) {
+        val start = synchronized(queued) {
+            val idle = pending == null
+            pending = d
+            idle
+        }
+        if (start) writer.execute {
+            val next = synchronized(queued) { pending.also { pending = null } } ?: return@execute
+            try {
+                save(next)
+                failed = null
+            } catch (e: Exception) {
+                failed = e
+                runCatching { log.log("error", "layout-save-failed", "error" to e.toString()) }
+            }
+        }
+    }
+
+    /** Waits until every change so far is on disk, and throws if the last save failed (off the main thread: agents, restore, tests). */
+    fun flush() {
+        writer.submit {}.get()
+        failed?.let { throw it }
+    }
+
+    /** Every change goes through here: mutate a copy's lists, publish, save. */
     @Synchronized fun update(block: (LayoutData) -> Unit) {
         // A copy changed, never the one on screen: changed in place, the old
         // value already held the change, Compose's remember keys saw no
         // difference and the open drawer kept a hidden app (2026-11-11).
         val d = data.value.copyDeep()
         block(d)
-        save(d)
         data.value = d
+        queueSave(d)
     }
 
     @Synchronized fun replace(d: LayoutData) {
-        save(d)
         data.value = d
+        queueSave(d)
     }
 }
