@@ -128,12 +128,35 @@ class HomeGesturesTest {
             moveTo(first - Offset(0f, 300f))
             advanceEventTime(150)
             moveTo(second)
-            advanceEventTime(200)
+            // Resting over its icon until it lights (owner, 2026-11-18: a
+            // quick drop moves, a rest makes the folder).
+            advanceEventTime(900)
             up()
         }
         rule.waitForIdle()
         assertFalse("no drawer after a hold", drawerOpen())
-        assertTrue("dropped on a pin: a folder", App.instance.layout.data.value.pins.any { it is Pin.FolderRef })
+        assertTrue("rested on a pin: a folder", App.instance.layout.data.value.pins.any { it is Pin.FolderRef })
+    }
+
+    @Test fun aHeldPinDroppedQuicklyOnAnotherMovesThere() {
+        val pins = twoAppPins()
+        val origin = rule.onNodeWithTag("pins").fetchSemanticsNode().boundsInRoot.topLeft
+        val first = rule.onNodeWithTag("app:${pins[0].id.key()}").fetchSemanticsNode().boundsInRoot.center - origin
+        val second = rule.onNodeWithTag("app:${pins[1].id.key()}").fetchSemanticsNode().boundsInRoot.center - origin
+        rule.onNodeWithTag("pins").performTouchInput {
+            down(first)
+            advanceEventTime(800)
+            moveTo((first + second) / 2f)
+            advanceEventTime(100)
+            moveTo(second)
+            advanceEventTime(100)
+            up()
+        }
+        rule.waitForIdle()
+        val now = App.instance.layout.data.value.pins
+        assertFalse("no folder from a quick drop", now.any { it is Pin.FolderRef })
+        assertEquals("the first pin moved to the second's place", Pin.App(pins[0].id), now[1])
+        assertEquals(Pin.App(pins[1].id), now[0])
     }
 
     @Test fun aHeldFolderDraggedToAnotherCellMoves() {

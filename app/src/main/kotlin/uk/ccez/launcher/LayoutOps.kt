@@ -359,3 +359,36 @@ sealed class PinTarget<out E> {
             }
     }
 }
+
+/**
+ * The dock grid's cells under a finger (px from the grid's top left), for
+ * a lifted pin. Pure, so the arithmetic is tested without a screen.
+ */
+object DockSlots {
+    /** The cell a lifted pin lands in: the nearest one, never outside the row. */
+    fun at(x: Float, y: Float, columns: Int, cellW: Float, rowH: Float, count: Int): Int {
+        if (count <= 0 || columns <= 0) return 0
+        val rows = (count + columns - 1) / columns
+        val col = if (cellW > 0f) kotlin.math.floor(x / cellW).toInt().coerceIn(0, columns - 1) else 0
+        val row = if (rowH > 0f) kotlin.math.floor(y / rowH).toInt().coerceIn(0, rows - 1) else 0
+        return (row * columns + col).coerceIn(0, count - 1)
+    }
+
+    /** The cell exactly under a finger at rest (a tap, a hold's start); null between and around them. */
+    fun exact(x: Float, y: Float, columns: Int, cellW: Float, rowH: Float, count: Int): Int? {
+        if (count <= 0 || columns <= 0 || cellW <= 0f || rowH <= 0f || x < 0f || y < 0f) return null
+        val col = kotlin.math.floor(x / cellW).toInt()
+        if (col >= columns) return null
+        val i = kotlin.math.floor(y / rowH).toInt() * columns + col
+        return i.takeIf { it < count }
+    }
+
+    /** The row as drawn while the pin at [from] is held over cell [to]: the others make room. */
+    fun <T> preview(items: List<T>, from: Int, to: Int): List<T> {
+        if (from !in items.indices) return items
+        val out = items.toMutableList()
+        val p = out.removeAt(from)
+        out.add(to.coerceIn(0, out.size), p)
+        return out
+    }
+}

@@ -45,6 +45,10 @@ import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -209,7 +213,8 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
     val layout by app.layout.data.collectAsState()
     val settingsTick by app.settings.version.collectAsState()
     val showClock = remember(settingsTick) { app.settings.bool("home.clock") }
-    val isHome = remember(settingsTick) { app.apps.isDefaultHome() }
+    val resumed = rememberResumeTick()
+    val isHome = remember(settingsTick, resumed) { app.apps.isDefaultHome() }
     var folderOpen by remember { mutableStateOf<Folder?>(null) }
 
     // Widgets together take at most a quarter of the screen, so the clock,
@@ -327,9 +332,17 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
 }
 
 /**
- * The pinned apps at the bottom. A hold lifts one: dropped on another it
- * makes a folder, on a folder it joins, elsewhere it moves. A hold
- * dropped back where it started opens its menu.
+ * The pinned apps at the bottom. A hold lifts one (a buzz) and it follows
+ * the finger while the others make room; let go, it stays in the cell it
+ * was let go on (owner, 2026-11-18: an app couldn't be dragged to a
+ * better spot; dropped on another it made a folder, between cells
+ * nothing happened). Held over another app's icon for a moment, that
+ * icon lights up: let go there, the two make a folder, or it joins the
+ * folder. A hold let go where it started opens its menu.
+ *
+ * One gesture handler for the whole grid, finding cells by where the
+ * finger is: cells move while one is held, and a handler per cell would
+ * have been taken away mid-drag.
  */
 @Composable fun PinnedGrid(
     pins: List<Pin>,
@@ -343,28 +356,61 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
     // Collected so the row appears as soon as the app list lands.
     val entries by app.apps.apps.collectAsState()
     val byId = remember(entries) { entries.associateBy { it.id } }
-    // The gesture blocks below outlive compositions (pointerInput restarts
-    // only on its keys), so they read the row through these: a cell tapped
-    // or held after a move, or after the app list landed, acts on the pin
-    // it shows now (review 2026-11-14: a moved pin opened the old app).
+    // Until the list is in, the names and icons saved last run; with
+    // neither yet, the row waits unseen rather than show names alone.
+    val saved by app.apps.savedLabels.collectAsState()
+    val savedReady by app.apps.savedReady.collectAsState()
+    val ready = entries.isNotEmpty() || savedReady
+    // The gesture block outlives compositions (pointerInput restarts only
+    // on its keys), so it reads the row through these: a cell tapped or
+    // held after a move, or after the app list landed, acts on the pin it
+    // shows now (review 2026-11-14: a moved pin opened the old app).
     val livePins by rememberUpdatedState(pins)
     val liveById by rememberUpdatedState(byId)
     val liveFolders by rememberUpdatedState(folders)
     val launch by rememberUpdatedState(onLaunch)
     val menu by rememberUpdatedState(onMenu)
     val openFolder by rememberUpdatedState(onOpenFolder)
+    val haptics = LocalHapticFeedback.current
     BoxWithConstraints(Modifier.fillMaxWidth().padding(bottom = 6.dp).testTag("pins")) {
         val columns = dockColumns(maxWidth.value.toInt(), pins.size)
         // The first and last icons sit on the margins, as the strips above do.
         val side = Look.gridPad(maxWidth, columns)
-        val totalWidth = maxWidth - side * 2
-        val positions = remember { mutableStateMapOf<Int, Rect>() }
-        var containerTopLeft by remember { mutableStateOf(Offset.Zero) }
-        var dragIndex by remember { mutableStateOf<Int?>(null) }
-        var dragPos by remember { mutableStateOf(Offset.Zero) }
-        var dragMoved by remember { mutableStateOf(0f) }
+        val cellDp = (maxWidth - side * 2) / columns
         val density = LocalDensity.current
-        val cellW = with(density) { (totalWidth / columns).toPx() }
+        val grid = remember { DockGrid() }
+        grid.columns = columns
+        grid.cellW = with(density) { cellDp.toPx() }
+        grid.iconTop = with(density) { (8.dp + Look.icon / 2).toPx() }
+        grid.iconReach = with(density) { (Look.icon / 2).toPx() }
+        // The lift: which pin (its place in the row), where the finger is
+        // in the grid, the cell it would land in, the pin lit for a folder.
+        var lifted by remember { mutableStateOf<Int?>(null) }
+        var finger by remember { mutableStateOf(Offset.Zero) }
+        var slot by remember { mutableStateOf(0) }
+        var ring by remember { mutableStateOf<Int?>(null) }
+        // Where the finger rests while lifted: a cell as drawn, and whether
+        // over its icon. Resting, the row makes room (or the icon lights).
+        var hover by remember { mutableStateOf<Pair<Int, Boolean>?>(null) }
+        val order = lifted?.let { from -> DockSlots.preview(pins.indices.toList(), from, slot) } ?: pins.indices.toList()
+        val liveOrder by rememberUpdatedState(order)
+        LaunchedEffect(hover) {
+            val (cell, onIcon) = hover ?: return@LaunchedEffect
+            val target = liveOrder.getOrNull(cell) ?: return@LaunchedEffect
+            if (onIcon) {
+                delay(450)
+                ring = target
+                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+            } else {
+                // A short rest, so passing over a cell on the way to an
+                // icon doesn't shuffle the row under the finger.
+                delay(180)
+                if (slot != cell) {
+                    slot = cell
+                    haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+                }
+            }
+        }
 
         fun tap(index: Int) {
             when (val target = PinTarget.at(livePins, index, liveById, liveFolders)) {
@@ -377,82 +423,163 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
             }
         }
 
-        fun finishDrag() {
-            val from = dragIndex ?: return
-            val to = positions.entries.firstOrNull { (_, r) -> r.contains(dragPos) }?.key
-            dragIndex = null
+        fun openMenu(index: Int) {
+            when (val target = PinTarget.at(livePins, index, liveById, liveFolders)) {
+                is PinTarget.AppPin -> menu(MenuTarget.HomeApp(index, target.entry))
+                is PinTarget.ShortcutPin -> menu(MenuTarget.HomeShortcut(index, target.pin))
+                is PinTarget.FolderPin -> menu(MenuTarget.HomeFolder(index, target.folder))
+                is PinTarget.GoneApp -> menu(MenuTarget.HomeGone(index, target.pin))
+                null -> Unit
+            }
+        }
+
+        /** Let go at [at]: into a folder when one is lit, else moved to the cell under the finger. */
+        fun drop(from: Int, at: Offset, wandered: Boolean) {
+            val lit = ring
+            val count = livePins.size
+            val to = grid.slotAt(at, count)
             when {
-                to == null -> Unit
-                to == from -> when (val target = PinTarget.at(livePins, from, liveById, liveFolders)) {
-                    is PinTarget.AppPin -> menu(MenuTarget.HomeApp(from, target.entry))
-                    is PinTarget.ShortcutPin -> menu(MenuTarget.HomeShortcut(from, target.pin))
-                    is PinTarget.FolderPin -> menu(MenuTarget.HomeFolder(from, target.folder))
-                    is PinTarget.GoneApp -> menu(MenuTarget.HomeGone(from, target.pin))
-                    null -> Unit
-                }
-                else -> {
-                    // The middle half of the cell makes a folder; the rest moves it.
-                    val r = positions[to] ?: return
-                    val middle = kotlin.math.abs(dragPos.x - r.center.x) < r.width / 4 && kotlin.math.abs(dragPos.y - r.center.y) < r.height / 4
-                    pinDrop(app.layout, from, to, middle, after = dragPos.x > r.center.x)
+                lit != null && lit != from -> pinDrop(app.layout, from, lit, middle = true)
+                to == from -> if (!wandered) openMenu(from)
+                from in 0 until count && to in 0 until count -> app.layout.update { d ->
+                    if (from in d.pins.indices && to in d.pins.indices) LayoutOps.move(d, from, to)
                 }
             }
         }
 
-        Box(Modifier.padding(horizontal = side).onGloballyPositioned { containerTopLeft = it.boundsInRoot().topLeft }) {
-            Column {
-                for (row in pins.withIndex().chunked(columns)) {
-                    Row(Modifier.fillMaxWidth()) {
-                        for ((index, pin) in row) {
-                            Box(
-                                Modifier.width(totalWidth / columns)
-                                    .onGloballyPositioned { positions[index] = it.boundsInRoot() }
-                                    .alpha(if (dragIndex == index) 0.35f else 1f)
-                                    .pointerInput(index) {
-                                        detectTapGestures(onTap = { tap(index) })
+        Box(
+            Modifier.padding(horizontal = side)
+                .alpha(if (ready) 1f else 0f)
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val start = grid.cellAt(down.position, livePins.size) ?: return@awaitEachGesture
+                        val slop = viewConfiguration.touchSlop
+                        // A tap, a hold, or neither (a swipe: home's own).
+                        val held = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                            while (true) {
+                                val e = awaitPointerEvent()
+                                val c = e.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull false
+                                if (c.isConsumed) return@withTimeoutOrNull false
+                                val far = (c.position - down.position).getDistance() > slop
+                                if (!c.pressed) {
+                                    if (!far) {
+                                        c.consume()
+                                        tap(start)
                                     }
-                                    .pointerInput(index) {
-                                        detectDragGesturesAfterLongPress(
-                                            onDragStart = { local ->
-                                                val rect = positions[index] ?: Rect.Zero
-                                                dragIndex = index
-                                                dragMoved = 0f
-                                                dragPos = rect.topLeft + local
-                                            },
-                                            onDrag = { change, amount ->
-                                                change.consume()
-                                                dragPos += amount
-                                                dragMoved += amount.getDistance()
-                                            },
-                                            onDragEnd = { finishDrag() },
-                                            onDragCancel = { dragIndex = null },
-                                        )
-                                    },
+                                    return@withTimeoutOrNull false
+                                }
+                                if (far) return@withTimeoutOrNull false
+                            }
+                            @Suppress("UNREACHABLE_CODE")
+                            false
+                        } == null
+                        if (!held) return@awaitEachGesture
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        lifted = start
+                        slot = start
+                        ring = null
+                        hover = null
+                        finger = currentEvent.changes.firstOrNull { it.id == down.id }?.position ?: down.position
+                        val folderable = livePins.getOrNull(start) !is Pin.FolderRef
+                        var dropped = false
+                        // Taken over another cell at some point: let go back home, nothing (not the menu).
+                        var wandered = false
+                        try {
+                            while (true) {
+                                val e = awaitPointerEvent()
+                                val c = e.changes.firstOrNull { it.id == down.id } ?: break
+                                c.consume()
+                                if (!c.pressed) {
+                                    dropped = true
+                                    break
+                                }
+                                finger = c.position
+                                val cell = grid.slotAt(finger, livePins.size)
+                                val onIcon = folderable && grid.overIcon(finger, cell)
+                                // On the lifted pin's own cell: nothing to wait for.
+                                val next = if (cell == slot) null else cell to onIcon
+                                if (next != null) wandered = true
+                                if (next != hover) {
+                                    hover = next
+                                    if (ring != null && (next == null || !next.second || liveOrder.getOrNull(next.first) != ring)) ring = null
+                                }
+                            }
+                        } finally {
+                            if (dropped) drop(start, finger, wandered)
+                            lifted = null
+                            ring = null
+                            hover = null
+                        }
+                    }
+                },
+        ) {
+            Column(Modifier.onSizeChanged { grid.rowH = if (order.isEmpty()) 0f else it.height.toFloat() / ((order.size + columns - 1) / columns) }) {
+                for (row in order.chunked(columns)) {
+                    Row(Modifier.fillMaxWidth()) {
+                        for (index in row) {
+                            val pin = pins[index]
+                            Box(
+                                Modifier.width(cellDp)
+                                    .alpha(if (lifted == index) 0.3f else 1f)
+                                    .then(
+                                        if (ring == index) {
+                                            Modifier.background(Palette.accent.copy(alpha = 0.28f), RoundedCornerShape(16.dp))
+                                        } else {
+                                            Modifier
+                                        },
+                                    ),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                PinCell(pin, folders, byId, totalWidth / columns)
+                                PinCell(pin, folders, byId, cellDp, saved)
                             }
                         }
                     }
                 }
             }
-            // The lifted copy, under the finger.
-            dragIndex?.let { i ->
+            // The lifted copy, its icon under the finger.
+            lifted?.let { i ->
                 val pin = pins.getOrNull(i)
-                if (pin != null && dragMoved > 4f) {
+                if (pin != null) {
                     Box(
                         Modifier.offset {
                             IntOffset(
-                                (dragPos.x - containerTopLeft.x - cellW / 2).roundToInt(),
-                                (dragPos.y - containerTopLeft.y - cellW / 2).roundToInt(),
+                                (finger.x - grid.cellW / 2).roundToInt(),
+                                (finger.y - grid.iconTop).roundToInt(),
                             )
-                        }.alpha(0.9f),
+                        }.graphicsLayer {
+                            scaleX = 1.12f
+                            scaleY = 1.12f
+                            alpha = 0.92f
+                        },
                     ) {
-                        PinCell(pin, folders, byId, totalWidth / columns)
+                        PinCell(pin, folders, byId, cellDp, saved)
                     }
                 }
             }
         }
+    }
+}
+
+/** The dock grid's measures, in px, for finding cells under a finger. */
+private class DockGrid {
+    var columns = 1
+    var cellW = 1f
+    var rowH = 0f
+    /** From a cell's top to its icon's middle, and the icon's half width. */
+    var iconTop = 0f
+    var iconReach = 0f
+
+    fun slotAt(p: Offset, count: Int): Int = DockSlots.at(p.x, p.y, columns, cellW, rowH, count)
+
+    fun cellAt(p: Offset, count: Int): Int? = DockSlots.exact(p.x, p.y, columns, cellW, rowH, count)
+
+    /** Over the icon (not its name or the cell's edges) of cell [cell]. */
+    fun overIcon(p: Offset, cell: Int): Boolean {
+        if (rowH <= 0f) return false
+        val cx = (cell % columns + 0.5f) * cellW
+        val cy = (cell / columns) * rowH + iconTop
+        return kotlin.math.abs(p.x - cx) < iconReach * 0.8f && kotlin.math.abs(p.y - cy) < iconReach * 0.8f
     }
 }
 
@@ -462,6 +589,8 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
     folders: Map<String, Folder>,
     byId: Map<AppId, AppEntry>,
     width: Dp = Look.cell,
+    /** Names saved last run (AppRepository.savedLabels), for before the app list lands. */
+    saved: Map<String, String> = emptyMap(),
 ) {
     val shownNames by AppNames.shown.collectAsState()
     when (pin) {
@@ -474,6 +603,12 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
                     Modifier.semantics { contentDescription = e.label }.testTag("app:${e.key}"),
                 ) {
                     IconLabel(shown, width) { AppIconImage(e, it) }
+                }
+            } else if (pin.id.key() in saved) {
+                // Just restarted: as it was last run, until the list lands.
+                val key = pin.id.key()
+                Box(Modifier.semantics { contentDescription = saved[key].orEmpty() }) {
+                    IconLabel(shownNames[key] ?: saved[key].orEmpty(), width) { SavedIconImage(key, it) }
                 }
             } else {
                 Box(Modifier.width(width).padding(8.dp), contentAlignment = Alignment.Center) {
@@ -507,6 +642,7 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
                                     for (p in r) {
                                         when (p) {
                                             is Pin.App -> byId[p.id]?.let { AppIconImage(it, Modifier.size(16.dp)) }
+                                                ?: if (p.id.key() in saved) SavedIconImage(p.id.key(), Modifier.size(16.dp)) else Unit
                                             is Pin.Shortcut -> ShortcutIconImage(p, Modifier.size(16.dp))
                                             is Pin.FolderRef -> Unit
                                         }

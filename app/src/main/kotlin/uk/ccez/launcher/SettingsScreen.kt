@@ -43,8 +43,9 @@ import androidx.compose.ui.unit.sp
     val app = App.instance
     val ctx = LocalContext.current
     val tick by app.settings.version.collectAsState()
-    val isHome = remember(tick) { app.apps.isDefaultHome() }
-    val lockReady = remember(tick) { LockService.enabled(ctx) }
+    val resumed = rememberResumeTick()
+    val isHome = remember(tick, resumed) { app.apps.isDefaultHome() }
+    val lockReady = remember(tick, resumed) { LockService.enabled(ctx) }
 
     Column(Modifier.fillMaxSize().background(Palette.bg).testTag("settings")) {
         Row(
