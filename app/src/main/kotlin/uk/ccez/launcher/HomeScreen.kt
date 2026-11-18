@@ -213,8 +213,12 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
     val layout by app.layout.data.collectAsState()
     val settingsTick by app.settings.version.collectAsState()
     val showClock = remember(settingsTick) { app.settings.bool("home.clock") }
+    // Asked again on each return (the owner may have just made it home),
+    // off the main thread: it's a call to the system.
     val resumed = rememberResumeTick()
-    val isHome = remember(settingsTick, resumed) { app.apps.isDefaultHome() }
+    val isHome by androidx.compose.runtime.produceState(true, settingsTick, resumed) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { app.apps.isDefaultHome() }
+    }
     var folderOpen by remember { mutableStateOf<Folder?>(null) }
 
     // Widgets together take at most a quarter of the screen, so the clock,
@@ -398,7 +402,7 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
             val (cell, onIcon) = hover ?: return@LaunchedEffect
             val target = liveOrder.getOrNull(cell) ?: return@LaunchedEffect
             if (onIcon) {
-                delay(450)
+                delay(FOLDER_REST_MS)
                 ring = target
                 haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
             } else {
@@ -485,12 +489,20 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
                         var dropped = false
                         // Taken over another cell at some point: let go back home, nothing (not the menu).
                         var wandered = false
+                        // When the finger came to rest where it is (event time): a rest over an icon
+                        // long enough makes the folder at the drop even if the timer that lights it
+                        // hasn't run (a still finger sends no events; tests inject them all at once).
+                        var restingSince = 0L
                         try {
                             while (true) {
                                 val e = awaitPointerEvent()
                                 val c = e.changes.firstOrNull { it.id == down.id } ?: break
                                 c.consume()
                                 if (!c.pressed) {
+                                    val rest = hover
+                                    if (ring == null && rest != null && rest.second && c.uptimeMillis - restingSince >= FOLDER_REST_MS) {
+                                        ring = liveOrder.getOrNull(rest.first)
+                                    }
                                     dropped = true
                                     break
                                 }
@@ -502,6 +514,7 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
                                 if (next != null) wandered = true
                                 if (next != hover) {
                                     hover = next
+                                    restingSince = c.uptimeMillis
                                     if (ring != null && (next == null || !next.second || liveOrder.getOrNull(next.first) != ring)) ring = null
                                 }
                             }
@@ -560,6 +573,9 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
         }
     }
 }
+
+/** How long a lifted pin rests over another app's icon to make a folder. */
+private const val FOLDER_REST_MS = 450L
 
 /** The dock grid's measures, in px, for finding cells under a finger. */
 private class DockGrid {

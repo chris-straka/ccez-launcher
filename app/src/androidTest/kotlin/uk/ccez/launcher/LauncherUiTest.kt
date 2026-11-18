@@ -100,7 +100,8 @@ class LauncherUiTest {
             down(first)
             advanceEventTime(800)
             moveTo(second)
-            advanceEventTime(200)
+            // Rested over its icon (a quick drop moves instead, 2026-11-18).
+            advanceEventTime(900)
             up()
         }
         rule.waitForIdle()
