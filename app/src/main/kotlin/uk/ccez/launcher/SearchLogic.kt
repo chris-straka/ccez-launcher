@@ -3,17 +3,20 @@ package uk.ccez.launcher
 import java.text.Normalizer
 import kotlin.math.pow
 
+private val MARKS = Regex("\\p{Mn}+")
+private val SPACES = Regex("\\s+")
+
 /** Query text matched the same everywhere: case and accents don't count. */
 fun normalized(s: String): String {
     val n = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD)
-    return n.replace(Regex("\\p{Mn}+"), "").trim()
+    return n.replace(MARKS, "").trim()
 }
 
 /** 0: a word starts with the query. 1: the query is inside. -1: no. */
 fun matchRank(label: String, query: String): Int {
     if (query.isEmpty()) return 0
     val l = normalized(label)
-    if (l.split(Regex("\\s+")).any { it.startsWith(query) }) return 0
+    if (l.split(SPACES).any { it.startsWith(query) }) return 0
     return if (l.contains(query)) 1 else -1
 }
 

@@ -31,6 +31,8 @@ class LauncherLog(dir: File) {
         synchronized(lock) {
             runCatching { file.appendText(o.toString() + "\n") }
         }
+        // Errors in logcat too (unit tests have no logcat: never a throw).
+        if (level == "error") runCatching { android.util.Log.e("ccez-launcher", "$event ${ctx.joinToString(" ") { "${it.first}=${it.second}" }}".take(1000)) }
     }
 
     fun tail(lines: Int): String {

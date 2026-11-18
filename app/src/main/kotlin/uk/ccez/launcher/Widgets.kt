@@ -35,7 +35,8 @@ object Widgets {
     private const val HOST_ID = 1024
     private var host: AppWidgetHost? = null
 
-    fun host(ctx: Context): AppWidgetHost =
+    // Made once: main (onStart) and IO (validate at start) both ask for it.
+    @Synchronized fun host(ctx: Context): AppWidgetHost =
         host ?: AppWidgetHost(ctx.applicationContext, HOST_ID).also { host = it }
 
     fun manager(ctx: Context): AppWidgetManager = AppWidgetManager.getInstance(ctx)
@@ -121,7 +122,14 @@ object Widgets {
                     val h = heights[i] + 8f
                     AndroidView(
                         factory = { c ->
-                            Widgets.host(c).createView(c, entry.appWidgetId, info)
+                            // A provider gone or broken mid-inflate: an empty
+                            // slot and a log line, never a home that crashes
+                            // on every return (audit 2026-11-18).
+                            runCatching { Widgets.host(c).createView(c, entry.appWidgetId, info) as android.view.View }
+                                .getOrElse { e ->
+                                    App.instance.launcherLog.log("error", "widget-failed", "pkg" to info.provider.packageName, "error" to e.javaClass.simpleName)
+                                    android.view.View(c)
+                                }
                         },
                         modifier = Modifier.fillMaxWidth().height(h.dp).padding(vertical = 4.dp)
                             .pointerInput(entry.appWidgetId) {

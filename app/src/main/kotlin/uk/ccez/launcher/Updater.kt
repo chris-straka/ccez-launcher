@@ -23,13 +23,19 @@ import org.json.JSONObject
 object Updater {
     private const val LATEST = "https://api.github.com/repos/chris-straka/ccez-launcher/releases/latest"
     private const val EVERY = 6 * 60 * 60 * 1000L
-    @Volatile private var busy = false
+    private val busy = java.util.concurrent.atomic.AtomicBoolean(false)
 
     fun maybe(ctx: Context) {
         if (!App.instance.settings.bool("updates.self")) return
         val prefs = ctx.getSharedPreferences("updates", Context.MODE_PRIVATE)
-        if (busy || System.currentTimeMillis() - prefs.getLong("checked", 0) < EVERY) return
-        busy = true
+        if (System.currentTimeMillis() - prefs.getLong("checked", 0) < EVERY) return
+        run(ctx)
+    }
+
+    /** One check at a time: maybe() runs on main, force() on a binder thread. */
+    private fun run(ctx: Context) {
+        if (!busy.compareAndSet(false, true)) return
+        val prefs = ctx.getSharedPreferences("updates", Context.MODE_PRIVATE)
         App.instance.scope.launch {
             try {
                 prefs.edit().putLong("checked", System.currentTimeMillis()).apply()
@@ -37,27 +43,15 @@ object Updater {
             } catch (e: Exception) {
                 App.instance.launcherLog.log("warn", "update-failed", "error" to e.toString())
             } finally {
-                busy = false
+                busy.set(false)
             }
         }
     }
 
     fun force(ctx: Context) {
-        ctx.getSharedPreferences("updates", Context.MODE_PRIVATE).edit().putLong("checked", 0).apply()
         // `launcher update` means it: run even with updates.self off.
-        val prefs = ctx.getSharedPreferences("updates", Context.MODE_PRIVATE)
-        if (busy) return
-        busy = true
-        App.instance.scope.launch {
-            try {
-                prefs.edit().putLong("checked", System.currentTimeMillis()).apply()
-                check(ctx)
-            } catch (e: Exception) {
-                App.instance.launcherLog.log("warn", "update-failed", "error" to e.toString())
-            } finally {
-                busy = false
-            }
-        }
+        ctx.getSharedPreferences("updates", Context.MODE_PRIVATE).edit().putLong("checked", 0).apply()
+        run(ctx)
     }
 
     private fun get(url: String): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -92,8 +86,10 @@ object Updater {
     private fun sameSigner(ctx: Context, apk: File): Boolean {
         val pm = ctx.packageManager
         val flag = PackageManager.GET_SIGNING_CERTIFICATES
-        val theirs = pm.getPackageArchiveInfo(apk.path, flag)?.signingInfo?.apkContentsSigners?.map { it.toByteArray().contentHashCode() } ?: return false
-        val ours = pm.getPackageInfo(ctx.packageName, flag).signingInfo?.apkContentsSigners?.map { it.toByteArray().contentHashCode() } ?: return false
+        // By SHA-256, not a 32-bit hash code (audit 2026-11-18).
+        fun digest(b: ByteArray) = MessageDigest.getInstance("SHA-256").digest(b).joinToString("") { "%02x".format(it) }
+        val theirs = pm.getPackageArchiveInfo(apk.path, flag)?.signingInfo?.apkContentsSigners?.map { digest(it.toByteArray()) } ?: return false
+        val ours = pm.getPackageInfo(ctx.packageName, flag).signingInfo?.apkContentsSigners?.map { digest(it.toByteArray()) } ?: return false
         return theirs.toSet() == ours.toSet()
     }
 
@@ -114,6 +110,9 @@ object Updater {
         } catch (e: Exception) {
             runCatching { installer.abandonSession(id) }
             throw e
+        } finally {
+            // Copied into the session (or abandoned): not kept in the cache.
+            apk.delete()
         }
     }
 

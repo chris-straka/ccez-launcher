@@ -145,10 +145,12 @@ object Today {
             reviewed.value = 0
         }
         reviewed.value += 1
-        writeSafely(
-            file(ctx),
-            org.json.JSONObject().put("day", day).put("reviewed", reviewed.value).toString(),
-        )
+        runCatching {
+            writeSafely(
+                file(ctx),
+                org.json.JSONObject().put("day", day).put("reviewed", reviewed.value).toString(),
+            )
+        }.onFailure { runCatching { App.instance.launcherLog.log("error", "today-save-failed", "error" to it.javaClass.simpleName) } }
     }
 }
 

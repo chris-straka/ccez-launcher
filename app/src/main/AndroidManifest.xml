@@ -38,12 +38,13 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:theme="@style/Launcher">
         <profileable android:shell="true" />
 
         <activity
             android:name=".MainActivity"
             android:clearTaskOnLaunch="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|fontScale"
             android:excludeFromRecents="true"
             android:exported="true"
             android:launchMode="singleTask"

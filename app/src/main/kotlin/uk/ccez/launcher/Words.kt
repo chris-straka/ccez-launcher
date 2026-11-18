@@ -33,6 +33,11 @@ object Words {
     }
 
     /** The launcher's word settings, kept in the core's own settings too. */
+    /** A core call that failed: its kind only (a message could quote a word). */
+    private fun failed(event: String, e: Throwable) {
+        runCatching { App.instance.launcherLog.log("error", event, "error" to e.javaClass.simpleName) }
+    }
+
     fun applyWordSettings(ctx: Context, e: Engine) {
         val app = ctx as? App ?: (ctx.applicationContext as? App) ?: return
         runCatching { e.setSetting("learning.screen", app.settings.number("words.count").toString()) }
@@ -49,13 +54,13 @@ object Words {
         val e = engineOrNull() ?: return emptyList()
         return runCatching {
             e.screenWords(up.map { LearningWord(it.lang, it.word) })
-        }.getOrDefault(emptyList())
+        }.onFailure { failed("screen-words-failed", it) }.getOrDefault(emptyList())
     }
 
     /** A word's status set on its card (Learning / Known / neither). */
     fun setStatus(ctx: Context, lang: String, word: String, status: uk.ccez.keys.core.WordStatus, scope: CoroutineScope) {
         scope.launch(Dispatchers.IO) {
-            runCatching { engine(ctx).setWordStatus(lang, word, status) }
+            runCatching { engine(ctx).setWordStatus(lang, word, status) }.onFailure { failed("word-status-failed", it) }
         }
     }
 
@@ -65,7 +70,7 @@ object Words {
         scope.launch(Dispatchers.IO) {
             runCatching {
                 engine(ctx).gradeScreenWord(word.lang, word.word, grade)
-            }
+            }.onFailure { failed("grade-failed", it) }
         }
     }
 }

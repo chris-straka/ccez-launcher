@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -171,6 +172,7 @@ private fun spotFor(word: ScreenWord, up: List<UpWord>, a: Area): Pair<Float, Fl
         for (u in up.value) {
             // The meaning wraps before the right margin, never off the screen.
             val room = (maxWidth * (1f - u.x) - Look.margin).coerceAtLeast(140.dp)
+            androidx.compose.runtime.key(u.word.lang, u.word.word) {
             WordCell(
                 up = u,
                 modifier = Modifier.offset {
@@ -181,6 +183,7 @@ private fun spotFor(word: ScreenWord, up: List<UpWord>, a: Area): Pair<Float, Fl
                 onLongPress = { answer(u, Grade.AGAIN) },
                 onPress = { u.held = it },
             )
+            }
         }
     }
 }
@@ -202,7 +205,8 @@ private fun spotFor(word: ScreenWord, up: List<UpWord>, a: Area): Pair<Float, Fl
     val baseAlpha = if (peek) 1f else 0.6f
     Column(
         modifier
-            .alpha(baseAlpha * fade.value)
+            // Read while drawing: the 2 s fade no longer recomposes each frame.
+            .graphicsLayer { alpha = baseAlpha * fade.value }
             .pointerInput(w.lang, w.word) {
                 detectTapGestures(
                     onPress = {
