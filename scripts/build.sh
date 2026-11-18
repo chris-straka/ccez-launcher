@@ -10,6 +10,9 @@ cd "$(dirname "$0")/.."
 KEYDIR="$HOME/.config/ccez-launcher"
 mkdir -p "$KEYDIR"
 if [ ! -f "$KEYDIR/release.jks" ]; then
+  # A new key can't update the phone's launcher (uninstall, layout lost):
+  # made only when asked for, never because a machine lacks the key.
+  [ "${NEW_KEY:-}" = 1 ] || { echo "no signing key in $KEYDIR: copy it from z, or NEW_KEY=1 to make one" >&2; exit 1; }
   PASS="$(openssl rand -base64 24)"
   printf '%s' "$PASS" > "$KEYDIR/password"
   keytool -genkeypair -v -keystore "$KEYDIR/release.jks" -alias ccez-launcher \

@@ -40,9 +40,12 @@ with a release the owner can install.
 ## Stage 1: a launcher that's good at being a launcher — shipped
 
 Shipped 2026-11-11 (see Status): HOME activity and the `ROLE_HOME` ask;
-every profile's apps cached from `LauncherApps`; pinned row (drag to
-reorder, drop on another for a folder, a hold dropped back opens the
-menu); swipe up anywhere on home (over the pins, the strips and the Ask
+every profile's apps cached from `LauncherApps`; pinned row (a hold
+lifts a pin with a buzz and the others make room as it moves; let go,
+it stays where it was let go; rested over another app's icon until it
+lights, a folder; a hold let go where it started opens the menu; home's
+icons and names kept on disk so a restart draws them on the first
+frame); swipe up anywhere on home (over the pins, the strips and the Ask
 field too; a hold is the pin's lift, never the drawer) opens the drawer
 with search (apps, contacts, settings pages, calculator, units; Enter
 launches the top app). Opening the drawer leaves search unfocused and
@@ -171,6 +174,20 @@ isn't installed there.
 - Anything that needs Google Play services.
 
 ## Status
+
+2026-11-18, the owner's two reports and an audit: the pinned row's
+icons come with their names on the first frame after a restart (saved
+on disk, the memory cache read at once, only an updated package's icons
+dropped); drag to move rebuilt (the row makes room, a quick drop moves,
+a rest over an icon makes the folder, one gesture handler for the grid,
+a buzz on lift); from the audit: a widget that fails can't crash home,
+app-list refreshes run in order, icon decodes four at a time and the
+cache sized by bytes, search regexes made once, home words keyed, the
+updater's single run and SHA-256 signer check, errors logged (and to
+logcat) where they were dropped, a black window before the first frame,
+no activity restart on rotation or font scale, "Set as home" re-checked
+on return, `check.sh`/`perf.sh` refuse anything but an emulator and
+`build.sh` won't make a new key unasked. Unit tests 53, all pass.
 
 2026-11-14, second pass on the review fixes (unit tests 48, all pass;
 instrumented tests compile, not run: no emulator this pass): the moved-cell

@@ -20,6 +20,8 @@ CORE="$(git -C "$KEYS" rev-parse --short HEAD)"
 ./gradlew --console=plain -q :app:testDebugUnitTest
 if [ -n "${LAUNCHER_SERIAL:-}" ]; then
   scripts/perf.sh
+else
+  echo "no LAUNCHER_SERIAL: the perf gate is skipped" >&2
 fi
 NO_INSTALL=1 scripts/build.sh
 CODE="$(git rev-list --count HEAD)"

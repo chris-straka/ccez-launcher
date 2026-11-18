@@ -5,6 +5,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 SERIAL="${LAUNCHER_SERIAL:?set LAUNCHER_SERIAL}"
+# These uninstall, force-stop and recompile the launcher: an emulator only,
+# never the owner's phone (its layout goes with an uninstall).
+case "$SERIAL" in emulator-*) ;; *) echo "$SERIAL isn't an emulator: refusing" >&2; exit 1 ;; esac
 export ANDROID_SERIAL="$SERIAL"
 ./gradlew --console=plain :app:testDebugUnitTest
 ./gradlew --console=plain :app:assembleDebug :app:assembleDebugAndroidTest

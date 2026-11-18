@@ -7,6 +7,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 SERIAL="${LAUNCHER_SERIAL:?set LAUNCHER_SERIAL}"
+# These uninstall, force-stop and recompile the launcher: an emulator only,
+# never the owner's phone (its layout goes with an uninstall).
+case "$SERIAL" in emulator-*) ;; *) echo "$SERIAL isn't an emulator: refusing" >&2; exit 1 ;; esac
 PKG=uk.ccez.launcher
 total_ms() { grep -E "^TotalTime:" | head -1 | awk '{print $2}' || true; }
 wait_ms() { grep -E "^WaitTime:" | head -1 | awk '{print $2}' || true; }
