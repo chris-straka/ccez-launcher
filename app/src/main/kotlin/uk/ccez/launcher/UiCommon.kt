@@ -142,12 +142,25 @@ object Look {
 }
 
 @Composable fun AppIconImage(entry: AppEntry, modifier: Modifier = Modifier) {
-    val bmp by produceState<Bitmap?>(null, entry.key) {
-        value = App.instance.apps.icon(entry)
+    val repo = App.instance.apps
+    val version by repo.iconsVersion.collectAsState()
+    // From memory on the first frame when it's there (always for home's
+    // own apps after a restart): no empty square, then the icon.
+    val bmp by produceState(repo.cachedIcon(entry.key), entry.key, version) {
+        value = repo.icon(entry)
     }
-    val b = bmp
+    IconBitmap(bmp, modifier)
+}
+
+/** A home app's icon by its key alone, before the app list is in (saved from the last run). */
+@Composable fun SavedIconImage(key: String, modifier: Modifier = Modifier) {
+    IconBitmap(remember(key) { App.instance.apps.cachedIcon(key) }, modifier)
+}
+
+@Composable private fun IconBitmap(b: Bitmap?, modifier: Modifier) {
     if (b != null) {
-        Image(b.asImageBitmap(), contentDescription = null, modifier = modifier)
+        val image = remember(b) { b.asImageBitmap() }
+        Image(image, contentDescription = null, modifier = modifier)
     } else {
         Box(modifier.clip(RoundedCornerShape(14.dp)).background(Palette.cell))
     }
@@ -418,4 +431,23 @@ sealed class MenuAction {
             }
         }
     }
+}
+
+/**
+ * Counts the screen coming back (ON_RESUME): a key for state that changes
+ * outside the app, such as being the default home or the lock service
+ * being on. Checked only on a settings change, they stayed wrong after
+ * the owner turned them on and came back (audit 2026-11-18).
+ */
+@Composable fun rememberResumeTick(): Int {
+    var tick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(owner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) tick++
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+    return tick
 }

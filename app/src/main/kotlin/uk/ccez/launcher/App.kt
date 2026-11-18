@@ -54,7 +54,13 @@ class App : Application() {
         // it. A pass that changes nothing writes nothing, so it settles.
         scope.launch {
             kotlinx.coroutines.flow.combine(apps.apps, layout.data) { list, _ -> list }
-                .collect { list -> if (apps.loaded.value && list.isNotEmpty()) reconcilePins(list) }
+                .collect { list ->
+                    if (apps.loaded.value && list.isNotEmpty()) {
+                        reconcilePins(list)
+                        // Home's icons and names saved for the next start's first frame.
+                        apps.saveHome(homeKeys(layout.data.value))
+                    }
+                }
         }
         // The word core wakes up after home does.
         scope.launch {
@@ -85,6 +91,17 @@ class App : Application() {
         var gone = 0
         layout.update { d -> gone = LayoutOps.reconcile(d, ids, listed, movedTo, installed) }
         launcherLog.log("info", "pins-reconciled", "removed" to gone)
+    }
+
+    /** Home's apps: the row, and the first four of each folder in it (their preview). */
+    private fun homeKeys(d: LayoutData): Set<String> {
+        val keys = LinkedHashSet<String>()
+        for (p in d.pins) when (p) {
+            is Pin.App -> keys.add(p.id.key())
+            is Pin.FolderRef -> d.folders[p.folderId]?.items?.take(4)?.forEach { if (it is Pin.App) keys.add(it.id.key()) }
+            is Pin.Shortcut -> Unit
+        }
+        return keys
     }
 
     /** First run: a short row to start from (phone, messages, camera, settings). */
