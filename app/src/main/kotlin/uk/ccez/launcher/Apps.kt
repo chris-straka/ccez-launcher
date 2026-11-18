@@ -130,7 +130,6 @@ class AppRepository(private val ctx: Context, private val scope: CoroutineScope,
 
     private fun list(changed: List<String>) {
         run {
-            for (pkg in changed) forgetIcons(pkg)
             val started = System.nanoTime()
             val la = launcherApps ?: return
             val um = userManager
@@ -158,7 +157,11 @@ class AppRepository(private val ctx: Context, private val scope: CoroutineScope,
             listedUsers = listed
             apps.value = out
             loaded.value = true
-            // Cells showing a changed package's icon draw it again.
+            // A changed package's icons go once the new list is in, so one
+            // drawn after this comes from the new entry; cells showing them
+            // draw again. Dropped before the list, a cell drawing in between
+            // read the replaced APK and kept Android's robot (2026-11-18).
+            for (pkg in changed) forgetIcons(pkg)
             if (changed.isNotEmpty()) iconsVersion.value += 1
             log.log("info", "apps", "count" to out.size, "profiles" to users.size, "ms" to (System.nanoTime() - started) / 1_000_000)
         }
@@ -202,10 +205,40 @@ class AppRepository(private val ctx: Context, private val scope: CoroutineScope,
     /** An app's icon, badged for its profile. Cached; call from the UI. */
     suspend fun icon(entry: AppEntry): Bitmap? {
         icons.get(entry.key)?.let { return it }
-        val bmp = withContext(iconWork) { render(entry) }
+        val bmp = withContext(iconWork) { renderCurrent(entry) }
         if (bmp != null) icons.put(entry.key, bmp)
         return bmp
     }
+
+    /** Bumped for a package each time its icons are dropped. */
+    private val iconGen = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private fun gen(pkg: String): Int = iconGen[pkg] ?: 0
+
+    /**
+     * [entry]'s icon drawn from the app list as it is now; null when the
+     * package changed while drawing (a cell asks again). An entry held from
+     * before an update points at the replaced APK, whose icon reads as
+     * Android's default robot, and once cached it stayed until the launcher
+     * restarted (Ccez YT after its self-update, owner 2026-11-18).
+     */
+    private fun renderCurrent(entry: AppEntry): Bitmap? {
+        val pkg = entry.id.pkg
+        val before = gen(pkg)
+        val current = byKey(entry.key) ?: entry
+        // Its APK replaced under a list that hasn't caught up: list it again
+        // (once per path, so an app whose APK is truly gone can't loop); the
+        // cell draws it after that.
+        val apk = current.info.applicationInfo.sourceDir
+        if (apk != null && !File(apk).exists() && staleApks.add(apk)) {
+            log.log("warn", "icon-stale-entry", "pkg" to pkg)
+            refresh(listOf(pkg))
+            return null
+        }
+        val bmp = render(current) ?: return null
+        return bmp.takeIf { gen(pkg) == before }
+    }
+
+    private val staleApks = java.util.Collections.synchronizedSet(HashSet<String>())
 
     private fun render(entry: AppEntry): Bitmap? = runCatching {
         var d: Drawable = entry.info.getIcon(density)
@@ -216,6 +249,7 @@ class AppRepository(private val ctx: Context, private val scope: CoroutineScope,
     }.onFailure { log.log("warn", "icon-failed", "pkg" to entry.id.pkg, "error" to it.javaClass.simpleName) }.getOrNull()
 
     private fun forgetIcons(pkg: String) {
+        iconGen.merge(pkg, 1, Int::plus)
         val prefix = "$pkg/"
         icons.snapshot().keys.filter { it.startsWith(prefix) }.forEach { icons.remove(it) }
         shortcutIcons.snapshot().keys.filter { it.startsWith(prefix) }.forEach { shortcutIcons.remove(it) }
@@ -260,7 +294,7 @@ class AppRepository(private val ctx: Context, private val scope: CoroutineScope,
             // Drawn again once a run (a theme or an update may have changed
             // it while the launcher wasn't running); after that, only when gone.
             if (now != null && file.exists() && key in checked) continue
-            val fresh = render(entry) ?: continue
+            val fresh = renderCurrent(entry) ?: continue
             checked.add(key)
             if (now == null || !now.sameAs(fresh)) {
                 icons.put(key, fresh)
