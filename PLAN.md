@@ -175,6 +175,16 @@ isn't installed there.
 
 ## Status
 
+2026-11-18 evening (v0.1.67): an updated app kept Android's robot icon
+until the launcher restarted (Ccez YT after each self-update). A
+refresh dropped the package's icons before the new list was in, and a
+cell drawing in between read the replaced APK. Now its icons go after
+the list, are drawn from the current entry, a draw that raced the
+change isn't kept, and an entry whose APK is gone is listed again.
+Checked on the phone: five reinstalls of Ccez YT with home showing kept
+its icon (the old build showed the robot three times in three). The
+app is named Ccez Launcher, like the owner's other apps.
+
 2026-11-18, the owner's two reports and an audit: the pinned row's
 icons come with their names on the first frame after a restart (saved
 on disk, the memory cache read at once, only an updated package's icons
