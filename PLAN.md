@@ -175,6 +175,21 @@ isn't installed there.
 
 ## Status
 
+2026-11-18 night: a status strip and screen for z (owner: "a widget on my
+phone that has the fleet status and the game build thing to send build
+requests"). The feed is ccez-dash on z (a private repo, over the tailnet
+only); the launcher reads it when `dash.server` is set and shows nothing
+otherwise. Strip: machines with their jobs, what runs by project and the
+queue, the two worst problems, each game's Play build with a rebuild
+button. A tap opens the rest: the night's check, Carbon, Claude's week,
+AI watch, Keep z quiet. Checked on the emulator against the real feed
+(its DNS set to MagicDNS so the tailnet name resolves, as on the phone):
+a tap on HLH's button built HLH on z (`Building · assets`, then fresh);
+a second ask was refused; Keep z quiet held z in fleet and let it go.
+A home-screen strip rather than an Android widget: home is this app, and
+a strip has buttons, live refresh and the full screen behind it without
+a second app. Unit tests 59.
+
 2026-11-18 evening (v0.1.67): an updated app kept Android's robot icon
 until the launcher restarted (Ccez YT after each self-update). A
 refresh dropped the package's icons before the new list was in, and a
