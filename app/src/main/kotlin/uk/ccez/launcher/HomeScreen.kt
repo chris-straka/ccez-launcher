@@ -225,20 +225,29 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
     // Widgets together take at most a quarter of the screen, so the clock,
     // the strips and the pins below them still fit on a phone.
     val widgetCap = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp / 4
+    // Where the Ask panel may go: from under the date (and the day's count)
+    // down to the Continue strip, or the Ask field when there's none; root px.
+    var homeTop by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var underClock by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var overAsk by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    Box(Modifier.fillMaxSize().onGloballyPositioned { homeTop = it.boundsInRoot().top }) {
     Column(
         Modifier.fillMaxSize().background(Palette.bg).testTag("home")
             .homeSwipes(onUp = onOpenDrawer, onDown = onShade),
     ) {
-        if (showClock) ClockText()
-        if (!isHome) {
-            TextButton(
-                onClick = onSetHome,
-                modifier = Modifier.padding(start = Look.margin - 12.dp, top = 4.dp).testTag("set-home"),
-            ) {
-                Text("Set as home", color = Palette.accent, fontSize = 15.sp)
+        Column(Modifier.fillMaxWidth().onGloballyPositioned { underClock = it.boundsInRoot().bottom }) {
+            if (showClock) ClockText()
+            if (!isHome) {
+                TextButton(
+                    onClick = onSetHome,
+                    modifier = Modifier.padding(start = Look.margin - 12.dp, top = 4.dp).testTag("set-home"),
+                ) {
+                    Text("Set as home", color = Palette.accent, fontSize = 15.sp)
+                }
             }
+            // The day's count reads as part of the date: the panel stops under it.
+            TodayStrip()
         }
-        TodayStrip()
         ClipStrip()
         Box(
             Modifier.weight(1f).fillMaxWidth().testTag("home-empty")
@@ -254,8 +263,10 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
         }
         WidgetStrip(maxHeight = widgetCap)
         DashStrip(onOpen = onOpenDash)
-        ContinueStrip(onLaunch = onLaunch)
-        LlmAskStrip()
+        Column(Modifier.fillMaxWidth().onGloballyPositioned { overAsk = it.boundsInRoot().top }) {
+            ContinueStrip(onLaunch = onLaunch)
+            LlmAskStrip()
+        }
         Spacer(Modifier.height(4.dp))
         PinnedGrid(
             pins = layout.pins,
@@ -264,6 +275,22 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
             onMenu = onMenu,
             onOpenFolder = { folderOpen = it },
         )
+    }
+    // The answer opens up from the Continue strip and stops under the date
+    // (owner 2026-11-18), over whatever strips are between while it's up.
+    // Home is already inside the safe area (MainActivity), keyboard included.
+    val density = LocalDensity.current
+    val top = (underClock - homeTop).coerceAtLeast(0f) + with(density) { 8.dp.toPx() }
+    val room = overAsk - homeTop - top
+    if (room > 0f) {
+        Box(
+            Modifier.fillMaxWidth().offset { IntOffset(0, top.roundToInt()) }
+                .height(with(density) { room.toDp() }),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            AskPanel(maxHeight = with(density) { room.toDp() })
+        }
+    }
     }
 
     folderOpen?.let { folder ->

@@ -107,7 +107,8 @@ their weekday and month still localized.
 Shipped 2026-11-11: a Today strip (words reviewed here today), the
 latest copy read while home is focused (dictionary meaning, one tap to
 save as Learning, dismiss per copy), an Ask field through ccez-llm's
-`ccez-llm://send?text=` deep link, and widget hosting (pick in Settings
+`ccez-llm://send?text=` deep link (answered in place on home since
+2026-11-18: see Status), and widget hosting (pick in Settings
 or another app's pin request, configure when asked, hold to remove;
 restores rebind by provider). Blocked, written here plainly: ccez-tube
 exposes no cross-app state (no control provider, no custom scheme —
@@ -174,6 +175,29 @@ isn't installed there.
 - Anything that needs Google Play services.
 
 ## Status
+
+2026-11-18 late: Ask answers on home (owner: "an AI chat that I can do
+right on the home screen that resets after a certain point of
+inactivty"). A question goes to ccez-llm's `AskService` (a bound
+service with a Messenger; only apps holding its `ASK_FROM_HOME`
+permission may bind: ccez-llm's own key, or this app's release
+certificate by `knownCerts`). ccez-llm answers with its own DeepSeek
+route and keeps the thread in its history; this app holds no key and no
+model code. The panel opens above the Continue strip and grows up to
+just under the date and the day's count (owner, same night), over the
+strips between; it streams, shows up to three sources and keeps
+follow-ups in one thread. It clears after
+`ask.reset_minutes` (default 5, 1–60; Settings "Ask resets after
+(min)") without activity, when the screen goes off, on back, on a swipe
+down and on the close mark. "Carry on in ccez-llm" opens the thread
+there (`ccez-llm://chat?id=home-<id>`). A failed answer shows its reason
+in words and Retry. Without a ccez-llm that has the service, Ask falls
+back to the old `ccez-llm://send?text=` link. Checked on the emulator
+with a debug ccez-llm through the Mac: answer, follow-up, carry on (both
+exchanges in ccez-llm's history), and the idle, screen-off and back
+resets in the log. Not checked: the release-signed permission on the
+phone, and the ccez-keys key route. Unit tests 62, UI tests 32 (on a
+fresh emulator through fleet: `scripts/fleet-check.sh`).
 
 2026-11-18 night: a status strip and screen for z (owner: "a widget on my
 phone that has the fleet status and the game build thing to send build

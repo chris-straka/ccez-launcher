@@ -223,6 +223,16 @@ object LastApp {
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     var text by remember { mutableStateOf("") }
+    // The answer panel is home's (HomeScreen.kt, over the strips).
+    // The thread gone (reset, carried on, closed): the field lets go too, or
+    // the keyboard comes back up on the way back to home.
+    val asked by Ask.turns.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(asked.isEmpty()) {
+        if (asked.isEmpty()) {
+            focus.clearFocus()
+            keyboard?.hide()
+        }
+    }
     PillField(
         value = text,
         onValueChange = { text = it },
@@ -231,7 +241,12 @@ object LastApp {
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
         keyboardActions = KeyboardActions(onSend = {
             val q = text.trim()
-            if (q.isNotEmpty()) {
+            // Answered here by ccez-llm's AskService; the old way (ccez-llm
+            // opens with the question) when it can't.
+            if (q.isNotEmpty() && Ask.send(ctx, q)) {
+                text = ""
+                keyboard?.hide()
+            } else if (q.isNotEmpty()) {
                 // Home stays composed under ccez-llm: a field left focused
                 // raised the keyboard again on the way back.
                 focus.clearFocus()

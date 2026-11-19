@@ -38,6 +38,7 @@ object SettingDefs {
         Def("words.clock_lang", Kind.Bool, false, "Clock in words", "The clock written out in a learning language (Stage 5)."),
         Def("updates.self", Kind.Bool, false, "Self-update", "The launcher installs releases itself from GitHub."),
         Def("words.server", Kind.Text, "", "Words server", "The ccez-words server, shared with the keyboard. Empty: words stay on the phone."),
+        Def("ask.reset_minutes", Kind.IntRange(1, 60), 5, "Ask resets after (min)", "Minutes without activity before the Ask panel on home clears (ccez-llm keeps the thread)."),
         Def("dash.server", Kind.Text, "", "Status server", "z's status feed (ccez-dash) over the tailnet, for home's status strip: machines, jobs, games, a rebuild button. Empty: no strip."),
     )
 

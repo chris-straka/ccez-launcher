@@ -16,7 +16,11 @@
     <!-- Continue: the app used last (granted by adb appops, or in Settings). -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" xmlns:tools="http://schemas.android.com/tools" tools:ignore="ProtectedPermissions" />
 
+    <!-- Ask on home: ccez-llm's AskService (Ask.kt). -->
+    <uses-permission android:name="studio.ccez.app.permission.ASK_FROM_HOME" />
     <queries>
+        <package android:name="studio.ccez.app" />
+        <package android:name="studio.ccez.app.debug" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
