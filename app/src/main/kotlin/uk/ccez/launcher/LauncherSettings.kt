@@ -38,6 +38,7 @@ object SettingDefs {
         Def("words.clock_lang", Kind.Bool, false, "Clock in words", "The clock written out in a learning language (Stage 5)."),
         Def("updates.self", Kind.Bool, false, "Self-update", "The launcher installs releases itself from GitHub."),
         Def("words.server", Kind.Text, "", "Words server", "The ccez-words server, shared with the keyboard. Empty: words stay on the phone."),
+        Def("dash.server", Kind.Text, "", "Status server", "z's status feed (ccez-dash) over the tailnet, for home's status strip: machines, jobs, games, a rebuild button. Empty: no strip."),
     )
 
     fun def(key: String): Def? = ALL.firstOrNull { it.key == key }
@@ -115,7 +116,9 @@ class LauncherSettings(dir: File, private val log: LauncherLog) {
     /** Sets one setting from JSON (`true`, `4`); a bare word is a string. Returns it as stored. */
     @Synchronized fun set(key: String, jsonValue: String): String {
         val d = SettingDefs.def(key) ?: error("no setting called $key; `launcher schema` lists them")
-        val parsed: Any = runCatching { org.json.JSONTokener(jsonValue).nextValue() }.getOrDefault(jsonValue)
+        // A text setting given bare is taken whole: JSON would read "https://z:8454" as "https".
+        val parsed: Any = if (d.kind == SettingDefs.Kind.Text && !jsonValue.trimStart().startsWith("\"")) jsonValue
+            else runCatching { org.json.JSONTokener(jsonValue).nextValue() }.getOrDefault(jsonValue)
         val v = SettingDefs.checked(d, parsed)
         values[key] = v
         save()
