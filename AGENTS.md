@@ -6,7 +6,10 @@ Owner rules: `~/AGENTS.md`, `~/SWE/AGENTS.md`. The spec and stages are in
 - Android only: Kotlin + Jetpack Compose. Word logic comes from the
   ccez-keys core (Rust, UniFFI), never re-written in Kotlin.
 - Verify on the emulator with screenshots; never the owner's phone unless
-  asked. Tests stay silent.
+  asked. Tests stay silent. The unit and UI tests on an emulator go
+  through fleet (`fleet run --snapshot --emulator --cores 6 --
+  scripts/fleet-check.sh`): it boots its own, names a hung test, and
+  shuts it down. Never leave an emulator or Gradle daemon running on z.
 - Commit small, push to `origin main`. Releases are local
   (`scripts/release.sh`).
 - This repo is public (owner, 2026-11-12): no tailnet hostnames or
