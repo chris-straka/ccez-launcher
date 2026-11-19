@@ -155,8 +155,9 @@ object Dash {
     val feed = MutableStateFlow<DashFeed?>(null)
     /** The last fetch failed: when, in ms (0: the feed is current). */
     val failedAt = MutableStateFlow(0L)
-    /** The answer to the last request (a rebuild, quiet), until the next fetch. */
+    /** The answer to the last request (a rebuild, quiet), for half a minute. */
     val said = MutableStateFlow("")
+    @Volatile private var saidAt = 0L
 
     fun server(): String = (App.instance.settings.get("dash.server") as String).trim().trimEnd('/')
 
@@ -190,6 +191,7 @@ object Dash {
                 .onSuccess {
                     feed.value = it
                     failedAt.value = 0
+                    if (said.value.isNotEmpty() && System.currentTimeMillis() - saidAt > 30_000) said.value = ""
                 }
                 .onFailure {
                     if (failedAt.value == 0L) log("warn", "dash-fetch-failed", "error" to it.javaClass.simpleName, "message" to it.message)
@@ -208,6 +210,7 @@ object Dash {
             val (ok, text) = runCatching { DashFeed.answer(call("POST", path)) }
                 .getOrElse { false to "z didn't answer" }
             log(if (ok) "info" else "warn", "dash-$what", "arg" to arg, "answer" to text)
+            saidAt = System.currentTimeMillis()
             said.value = text
         }
         refresh()
@@ -342,8 +345,9 @@ private fun gameWords(g: DashGame): Pair<String, Color> = when {
             }
         }
         if (flags.size > 2) Text("${flags.size - 2} more", color = Palette.dim, fontSize = Look.smallSize)
-        for (g in f.games.filter { !it.fresh || it.building.isNotEmpty() || it.failed.isNotEmpty() }) {
-            val (words, color) = gameWords(g)
+        for (g in f.games) {
+            // A fresh build in one quiet word; the rest as playbar says it.
+            val (words, color) = if (g.fresh && g.building.isEmpty() && g.failed.isEmpty()) "fresh" to Palette.dim else gameWords(g)
             Row(Modifier.heightIn(min = 32.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(g.name, color = Palette.fg, fontSize = Look.smallSize, fontWeight = FontWeight.Medium)
                 Text(
