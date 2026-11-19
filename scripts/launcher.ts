@@ -218,7 +218,7 @@ launcher unfolder <name>
 launcher rename-folder <old> <new>
 launcher gate <app> on|off
 launcher open <app>
-launcher home | drawer
+launcher home | drawer | dash
 launcher shortcuts <app> [--json]
 launcher pin-shortcut <app> <shortcut id|label> [--at N]
 <app>: label (any case, unique prefix), package or key. N: row position, 0 first.
@@ -295,6 +295,7 @@ function layout(cmd: string | undefined, words: string[]): void {
     case "open": need(rest, 1, "open <app>"); console.log(agent("open", { app: joined })); break;
     case "home": console.log(agent("home")); break;
     case "drawer": console.log(agent("drawer")); break;
+    case "dash": console.log(agent("dash")); break;
     case "shortcuts": {
       need(rest, 1, "shortcuts <app>");
       show(agent("shortcuts", { app: joined }), json, (v) =>

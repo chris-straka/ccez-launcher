@@ -208,6 +208,7 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
     onDoubleTap: () -> Unit,
     onLaunch: (AppEntry) -> Unit,
     onMenu: (MenuTarget) -> Unit,
+    onOpenDash: () -> Unit = {},
 ) {
     val app = App.instance
     val layout by app.layout.data.collectAsState()
@@ -252,6 +253,7 @@ fun Modifier.homeSwipes(onUp: () -> Unit, onDown: () -> Unit): Modifier = pointe
             HomeWordLayer(Modifier.fillMaxSize(), onLaunch = onLaunch)
         }
         WidgetStrip(maxHeight = widgetCap)
+        DashStrip(onOpen = onOpenDash)
         ContinueStrip(onLaunch = onLaunch)
         LlmAskStrip()
         Spacer(Modifier.height(4.dp))

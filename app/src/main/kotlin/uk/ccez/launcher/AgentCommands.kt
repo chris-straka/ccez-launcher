@@ -17,7 +17,7 @@ import org.json.JSONObject
 object AgentCommands {
     val methods = setOf(
         "apps", "pins", "hidden", "pin", "unpin", "move", "hide", "unhide",
-        "folder", "unfolder", "rename-folder", "gate", "open", "home", "drawer",
+        "folder", "unfolder", "rename-folder", "gate", "open", "home", "drawer", "dash",
         "shortcuts", "pin-shortcut",
     )
 
@@ -133,7 +133,7 @@ object AgentCommands {
                 app.apps.launch(app.apps.byId(a.id) ?: throw AgentError("${a.label} isn't installed"))
                 "opened ${a.label}"
             }
-            "home", "drawer" -> {
+            "home", "drawer", "dash" -> {
                 app.startActivity(
                     Intent(app, MainActivity::class.java)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.delay
 
-enum class Screen { HOME, DRAWER, SETTINGS }
+enum class Screen { HOME, DRAWER, SETTINGS, DASH }
 
 /**
  * The drawer rises a little as it fades in and sinks back as it goes;
@@ -102,6 +102,7 @@ class MainActivity : FragmentActivity() {
                                     onDoubleTap = { doubleTapLock() },
                                     onLaunch = launch,
                                     onMenu = openMenu,
+                                    onOpenDash = { screen = Screen.DASH },
                                 )
                             }
                             Box(Modifier.weight(1.2f)) {
@@ -126,7 +127,9 @@ class MainActivity : FragmentActivity() {
                                     onDoubleTap = { doubleTapLock() },
                                     onLaunch = launch,
                                     onMenu = openMenu,
+                                    onOpenDash = { screen = Screen.DASH },
                                 )
+                                Screen.DASH -> DashScreen(onBack = { screen = Screen.HOME })
                                 Screen.DRAWER -> DrawerScreen(
                                     onClose = { screen = Screen.HOME },
                                     onLaunch = launch,
@@ -182,7 +185,11 @@ class MainActivity : FragmentActivity() {
     private fun screenAsked(intent: Intent?): Screen {
         val asked = intent?.getStringExtra(AgentCommands.EXTRA_SCREEN) ?: return Screen.HOME
         App.instance.launcherLog.log("info", "screen", "asked" to asked)
-        return if (asked == "drawer") Screen.DRAWER else Screen.HOME
+        return when (asked) {
+            "drawer" -> Screen.DRAWER
+            "dash" -> Screen.DASH
+            else -> Screen.HOME
+        }
     }
 
     private var pendingWidgetId: Int = android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID
