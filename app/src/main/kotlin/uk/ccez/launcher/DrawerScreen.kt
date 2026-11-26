@@ -6,6 +6,8 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -25,8 +27,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -41,10 +45,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -55,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import kotlin.math.abs
 
 /**
  * Swipe up: the drawer (A–Z) with search at the top. Swipe right in it:
@@ -189,8 +198,14 @@ import androidx.fragment.app.FragmentActivity
                 }
             }),
         )
+        val close by rememberUpdatedState(onClose)
+        val gridState = rememberLazyGridState()
         if (query.isBlank()) {
-            AppGrid(visible, Modifier.fillMaxSize().testTag("drawer-grid")) { e, w ->
+            AppGrid(
+                visible,
+                Modifier.fillMaxSize().drawerSwipeClose(gridState) { close() }.testTag("drawer-grid"),
+                state = gridState,
+            ) { e, w ->
                 AppCell(
                     e,
                     onClick = { onLaunch(e); onClose() },
@@ -341,12 +356,62 @@ import androidx.fragment.app.FragmentActivity
 }
 
 /**
+ * A swipe down on the drawer's list closes the drawer whenever the list is
+ * already at its top when the finger lands. Watched on the Initial pass, like
+ * [Modifier.homeSwipes], so a downward drag at the top is taken before the
+ * grid's scrollable stretches it; a drag that starts below the top, or moves
+ * up or sideways first, stays the grid's or the pager's.
+ */
+private fun Modifier.drawerSwipeClose(
+    state: LazyGridState,
+    onClose: () -> Unit,
+): Modifier = pointerInput(state) {
+    val distance = 70f
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        if (state.canScrollBackward) return@awaitEachGesture
+        val holdMs = viewConfiguration.longPressTimeoutMillis
+        val slop = viewConfiguration.touchSlop
+        var taken = false
+        var dy = 0f
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            val moved = change.position - down.position
+            if (change.changedToUpIgnoreConsumed()) {
+                if (taken) {
+                    change.consume()
+                    dy = moved.y
+                }
+                break
+            }
+            if (taken) {
+                change.consume()
+                continue
+            }
+            if (change.isConsumed) break
+            if (change.uptimeMillis - down.uptimeMillis >= holdMs) break
+            if (abs(moved.x) > slop || abs(moved.y) > slop) {
+                if (moved.y > slop && moved.y > 2 * abs(moved.x)) {
+                    taken = true
+                    change.consume()
+                } else {
+                    break
+                }
+            }
+        }
+        if (taken && dy > distance) onClose()
+    }
+}
+
+/**
  * Apps in even columns whose first and last icons sit on the margins, as
  * the dock's do; rows a steady 8 dp apart.
  */
 @Composable fun AppGrid(
     apps: List<AppEntry>,
     modifier: Modifier = Modifier,
+    state: LazyGridState = rememberLazyGridState(),
     cell: @Composable (AppEntry, Dp) -> Unit,
 ) {
     BoxWithConstraints(modifier) {
@@ -356,6 +421,7 @@ import androidx.fragment.app.FragmentActivity
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             modifier = Modifier.fillMaxSize(),
+            state = state,
             contentPadding = PaddingValues(start = side, end = side, top = 0.dp, bottom = 16.dp),
         ) {
             items(apps, key = { it.key }) { e ->
