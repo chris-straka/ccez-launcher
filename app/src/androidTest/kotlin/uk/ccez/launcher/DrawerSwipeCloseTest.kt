@@ -17,6 +17,10 @@ import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -44,6 +48,7 @@ class DrawerSwipeCloseTest {
 
     private var layoutBefore: LayoutData? = null
     private var padded = false
+    private val padScope = CoroutineScope(Dispatchers.Default)
 
     @Before fun setUp() {
         shell("cmd role add-role-holder android.app.role.HOME uk.ccez.launcher")
@@ -58,6 +63,7 @@ class DrawerSwipeCloseTest {
     @After fun tearDown() {
         rule.mainClock.autoAdvance = true
         layoutBefore?.let { App.instance.layout.replace(it) }
+        padScope.cancel()
         if (padded) {
             // The phone's own list back before the next test.
             App.instance.apps.refresh()
@@ -91,16 +97,34 @@ class DrawerSwipeCloseTest {
     /**
      * The emulator has too few apps for the list to scroll: the same apps
      * again under other names until it does (the drawer shows the list as
-     * it is; tearDown lists the real apps again).
+     * it is; tearDown lists the real apps again). A fresh emulator's
+     * package events list the apps again now and then: the padding goes
+     * back on each new list, and on a quiet list to begin with.
      */
     private fun padTheList() {
-        val real = App.instance.apps.apps.value
-        val extra = (1..160).map { i ->
-            val e = real[i % real.size]
-            e.copy(id = e.id.copy(cls = e.id.cls + PAD + i), label = "${e.label} $i")
+        val repo = App.instance.apps
+        var last = repo.apps.value
+        var quietSince = System.currentTimeMillis()
+        val until = quietSince + 20_000
+        while (System.currentTimeMillis() < until && System.currentTimeMillis() - quietSince < 3_000) {
+            Thread.sleep(100)
+            if (repo.apps.value !== last) {
+                last = repo.apps.value
+                quietSince = System.currentTimeMillis()
+            }
         }
         padded = true
-        App.instance.apps.apps.value = real + extra
+        padScope.launch {
+            repo.apps.collect { list ->
+                if (list.isNotEmpty() && list.none { PAD in it.id.cls }) {
+                    repo.apps.value = list + (1..160).map { i ->
+                        val e = list[i % list.size]
+                        e.copy(id = e.id.copy(cls = e.id.cls + PAD + i), label = "${e.label} $i")
+                    }
+                }
+            }
+        }
+        rule.waitUntil(timeoutMillis = 10_000) { repo.apps.value.count { PAD in it.id.cls } == 160 }
         rule.waitForIdle()
     }
 

@@ -12,9 +12,10 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 2
 export LC_ALL=C
-OUT="${FLEET_ARTIFACTS:-$PWD/gate-out}/drawer-swipe-close"
-rm -rf "$OUT"
+# Fleet keeps only the files right in $FLEET_ARTIFACTS (not in folders).
+OUT="${FLEET_ARTIFACTS:-$PWD/gate-out}"
 mkdir -p "$OUT"
+rm -f "$OUT/fleet-check.log" "$OUT/instrument.txt" "$OUT/stalled.txt" "$OUT/failed.txt"
 # The 32 UI tests before this gate, plus DrawerSwipeCloseTest's 7.
 UI_TESTS_MIN=39
 FAILS=0
@@ -131,9 +132,10 @@ else:
     said = f"OK with {m.group(1)}, fewer than {ui_min}" if m else (
         f"{run.group(2)} of {run.group(1)} failed" if run else "no summary")
     print(f"FAIL  every UI test passes: {said}")
-    for (c, t), (code, _) in sorted(results.items()):
+    for (c, t), (code, stack) in sorted(results.items()):
         if code not in (0, 1):
-            print(f"      {KIND.get(code, code)}: {c.rsplit('.', 1)[-1]}.{t}")
+            first = next((l.strip() for l in stack.splitlines() if l.strip()), "")
+            print(f"      {KIND.get(code, code)}: {c.rsplit('.', 1)[-1]}.{t}: {first[:240]}")
 sys.exit(1 if fails else 0)
 PY
 [ $? -eq 0 ] || FAILS=$((FAILS + 1))
