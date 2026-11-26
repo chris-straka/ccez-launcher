@@ -115,6 +115,11 @@ only where they fail on main).
 ## Run log
 
 - 2026-11-26: the gate needs an emulator, and fleet's only emulator machine
-  runs Linux, so the gate runs with `--emulator` and its base check on Linux
-  only (`--baseline-on linux`). Earlier base runs on main: fleet jobs
-  nayzs6c4 and kkbeg83m. A gate run takes about 25 minutes there.
+  runs Linux, so the gate runs with `--emulator`. Base runs on main through
+  fleet: nayzs6c4 and kkbeg83m (this test; the three closing tests FAIL),
+  then this gate as committed (below). The runner's own base check is
+  skipped (`--baseline-on ''`): it waited almost 3 hours for that one
+  emulator and would have hit its gate timeout. A gate run takes about 25
+  minutes once it has the emulator.
+- 2026-11-26: a throwaway reference fix (the design above, never committed)
+  passed the gate, all 39 UI tests (fleet job 9dsuz3h2): the gate can pass.
