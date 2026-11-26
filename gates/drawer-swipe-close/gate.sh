@@ -16,7 +16,8 @@ export LC_ALL=C
 OUT="${FLEET_ARTIFACTS:-$PWD/gate-out}"
 mkdir -p "$OUT"
 rm -f "$OUT/fleet-check.log" "$OUT/instrument.txt" "$OUT/stalled.txt" "$OUT/failed.txt"
-# The 32 UI tests before this gate, plus DrawerSwipeCloseTest's 7.
+# The 32 UI tests before this gate, plus DrawerSwipeCloseTest's 7. Two
+# of the 32 fail on main on fleet's emulator: known-failures.txt.
 UI_TESTS_MIN=39
 FAILS=0
 pass() { echo "PASS  $1"; }
@@ -61,11 +62,11 @@ else
   tail -15 "$OUT/fleet-check.log" | detail
 fi
 
-python3 - "$OUT/instrument.txt" "$UI_TESTS_MIN" <<'PY'
+python3 - "$OUT/instrument.txt" "$UI_TESTS_MIN" gates/drawer-swipe-close/known-failures.txt <<'PY'
 import re
 import sys
 
-path, ui_min = sys.argv[1], int(sys.argv[2])
+path, ui_min, known_path = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 try:
     text = open(path, errors="replace").read()
 except OSError:
@@ -123,19 +124,52 @@ for name, what in TESTS:
         for l in shown:
             print("      " + l.strip()[:300])
 
+# Known failures on main: "class#test File.kt:line" (known-failures.txt).
+known = {}
+for line in open(known_path):
+    line = line.strip()
+    if line and not line.startswith("#"):
+        test, where = line.split()
+        known[test] = where
+
+def fails_at(c, stack):
+    """The first line of the stack in the test's own file, as File.kt:line."""
+    own = c.rsplit(".", 1)[-1] + ".kt:"
+    for l in stack.splitlines():
+        m = re.search(r"\((" + re.escape(own) + r"\d+)\)", l)
+        if m:
+            return m.group(1)
+    return "?"
+
 m = re.search(r"^OK \((\d+) tests?\)", text, re.M)
-if m and int(m.group(1)) >= ui_min:
-    print(f"PASS  every UI test passes ({m.group(1)} tests)")
-else:
+run = re.search(r"^Tests run: (\d+),\s+Failures: (\d+)", text, re.M)
+total = int(m.group(1)) if m else (int(run.group(1)) if run else 0)
+bad, excused = [], []
+for (c, t), (code, stack) in sorted(results.items()):
+    # Skipped by their own assumptions (-4) or ignored (-3): as the repo's
+    # own run counts them. This gate's tests are held to a pass above.
+    if code in (0, 1, -3, -4) or c == CLS:
+        continue
+    where = fails_at(c, stack)
+    first = next((l.strip() for l in stack.splitlines() if l.strip()), "")
+    line = f"{KIND.get(code, code)}: {c.rsplit('.', 1)[-1]}.{t} at {where}: {first[:200]}"
+    if code == -2 and known.get(f"{c}#{t}") == where:
+        excused.append(line)
+    else:
+        bad.append(line)
+if not text or total < ui_min:
     fails += 1
-    run = re.search(r"^Tests run: (\d+),\s+Failures: (\d+)", text, re.M)
-    said = f"OK with {m.group(1)}, fewer than {ui_min}" if m else (
-        f"{run.group(2)} of {run.group(1)} failed" if run else "no summary")
-    print(f"FAIL  every UI test passes: {said}")
-    for (c, t), (code, stack) in sorted(results.items()):
-        if code not in (0, 1):
-            first = next((l.strip() for l in stack.splitlines() if l.strip()), "")
-            print(f"      {KIND.get(code, code)}: {c.rsplit('.', 1)[-1]}.{t}: {first[:240]}")
+    print(f"FAIL  every other UI test passes: {total} tests ran, fewer than {ui_min}")
+elif bad:
+    fails += 1
+    print(f"FAIL  every other UI test passes: {len(bad)} failed")
+    for l in bad:
+        print("      " + l)
+else:
+    note = f", {len(excused)} failing where they fail on main too (known-failures.txt)" if excused else ""
+    print(f"PASS  every other UI test passes ({total} tests ran{note})")
+    for l in excused:
+        print("      " + l)
 sys.exit(1 if fails else 0)
 PY
 [ $? -eq 0 ] || FAILS=$((FAILS + 1))

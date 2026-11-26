@@ -30,7 +30,7 @@ down still scrolls the list, as now.
 - So the swipe has nothing to scroll, and Android's overscroll stretch plays:
   the list stretches down and springs back, which reads as "scrolling to the
   top", and the drawer stays open.
-- The gate on main shows it (see the run log below): the three closing tests
+- The gate on main shows it (fleet job kkbeg83m): the three closing tests
   fail with the drawer still open, the list at position 0 when each swipe
   began; the four tests of what must not change pass.
 
@@ -81,7 +81,10 @@ down still scrolls the list, as now.
   quick swipe down carries the list to its top and the drawer stays.
 - `swipeUpInTheDrawerStillScrollsTheList` and
   `swipeRightInTheDrawerStillOpensTheHiddenSpace`.
-- Every other unit and UI test still passes.
+- Every other unit and UI test still passes. Two UI tests fail on main on
+  fleet's emulator (`gates/drawer-swipe-close/known-failures.txt`: the
+  keyboard's first show times out, a gated app opens before its word); the
+  gate lets them fail at that same line only. They are not yours to fix.
 
 ## Rules
 
@@ -106,10 +109,12 @@ The gate prints `GATE PASS`. It runs `scripts/fleet-check.sh` as the repo
 does (unit tests, build, every UI test on an emulator it boots), then prints
 PASS or FAIL for: the app code doesn't look for the tests; unit tests; the
 build; the UI tests ran to the end; each of the seven tests above by name;
-every UI test passes (at least 39).
+every other UI test passes (at least 39 ran; the known failures on main
+only where they fail on main).
 
 ## Run log
 
 - 2026-11-26: the gate needs an emulator, and fleet's only emulator machine
   runs Linux, so the gate runs with `--emulator` and its base check on Linux
-  only.
+  only (`--baseline-on linux`). Earlier base runs on main: fleet jobs
+  nayzs6c4 and kkbeg83m. A gate run takes about 25 minutes there.

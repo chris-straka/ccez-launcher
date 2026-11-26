@@ -1,0 +1,9 @@
+# UI tests that fail on main on fleet's emulator, each with the line it fails
+# at (base runs nayzs6c4 and kkbeg83m, 2026-11-26). The gate lets them fail
+# there only; failing anywhere else, or any other test failing, is a FAIL.
+# The keyboard app cold-starts on the freshly wiped emulator and its first
+# show times out (logcat: ImeTracker STATUS_TIMEOUT).
+uk.ccez.launcher.HomeGesturesTest#drawerOpensWithSearchUnfocusedAndNoKeyboard HomeGesturesTest.kt:96
+# The gated app opens before its word arrives on the loaded emulator (one
+# run of two), so the gate's screen never shows.
+uk.ccez.launcher.LauncherUiTest#aGatedAppAsksOneWordFirst LauncherUiTest.kt:186
